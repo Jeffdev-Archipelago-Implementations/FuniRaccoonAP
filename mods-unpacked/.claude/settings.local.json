@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep:*)",
+      "Bash(find \"c:\\\\Users\\\\robot\\\\Desktop\\\\Funi Raccoon Game Redux\" -type f -name \"*.gd\" -exec grep -l \"emit.*dumpster_added_item\\\\|dumpster_added_item.*emit\" {} \\\\;)",
+      "Bash(find \"c:\\\\Users\\\\robot\\\\Desktop\\\\Funi Raccoon Game Redux\" -type f -name \"*.gd\" -exec grep -l \"items_stored.append\\\\|items_found.append\" {} \\\\;)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(k\\) for k in d.keys\\(\\)]\")",
+      "Bash(grep -v \"^$\")",
+      "Bash(python3 -c \" data = open\\('C:/Program Files \\(x86\\)/Steam/steamapps/common/Funi Raccoon Game/Funi_Raccoon_Game.pck', 'rb'\\).read\\(\\) import re paths = re.findall\\(b'res://[^\\\\x00]+\\\\.gd', data\\) for p in sorted\\(set\\(paths\\)\\): print\\(p.decode\\('utf-8', errors='ignore'\\)\\) \")",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -c \"data=open\\('C:/Program Files \\(x86\\)/Steam/steamapps/common/Funi Raccoon Game/Funi_Raccoon_Game.pck','rb'\\).read\\(200\\); print\\(repr\\(data\\)\\)\")"
+    ]
+  }
+}

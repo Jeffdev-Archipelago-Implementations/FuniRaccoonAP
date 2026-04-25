@@ -1,0 +1,63 @@
+{
+	"name": "FuniRaccoonAP",
+	"namespace": "Jeffdev",
+	"version_number": "0.1.0",
+	"description": "Archipelago MultiWorld Client",
+	"website_url": "",
+	"dependencies": [],
+	"extra": {
+		"godot": {
+			"incompatibilities": [],
+			"authors": [
+				"Jeffdev"
+			],
+			"compatible_mod_loader_version": [
+                "7.0.0"
+			],
+			"compatible_game_version": [
+                "0.0.0"
+			],
+			"config_schema": {
+				"$schema": "https://json-schema.org/draft/2020-12/schema",
+				"title": "Archipelago Config",
+				"description": "Configuration for the Archipelago Client mod",
+				"type": "object",
+				"properties": {
+					"ap_server": {
+						"title": "Archipelago Server",
+						"type": "string",
+						"anyOf": [
+							{
+								"format": "hostname"
+							},
+							{
+								"format": "idn-hostname"
+							},
+							{
+								"format": "ipv4"
+							},
+							{
+								"format": "ipv6"
+							}
+						],
+						"minLength": 1,
+						"default": "archipelago.gg"
+					},
+					"ap_player": {
+						"title": "Archipelago Player",
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 16,
+						"default": "Player"
+					},
+					"ap_password": {
+						"title": "Archipelago Password",
+						"type": "string",
+						"minLength": 0,
+						"default": ""
+					}
+				}
+			}
+		}
+	}
+}
