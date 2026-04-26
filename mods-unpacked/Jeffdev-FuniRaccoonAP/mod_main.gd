@@ -213,14 +213,16 @@ func _on_node_added(node: Node) -> void:
 						var flag: String = entry[1]
 						for conn in upgrade_sign.button.pressed.get_connections():
 							upgrade_sign.button.pressed.disconnect(conn["callable"])
-						if Globals.save_file.truck_upgrades.has(flag):
+						var check_location_id: int = ap_client.SHOP_UPGRADE_LOCATION_IDS.get(flag, 0)
+						var already_checked: bool = Globals.save_file.get_meta("ap_checked_shop_upgrades", []).has(check_location_id)
+						if already_checked:
 							upgrade_sign.cur_state = truck_upgrade_sign.sign_states.PURCHASED
 							upgrade_sign.updated_state()
 						else:
 							upgrade_sign.cur_state = truck_upgrade_sign.sign_states.UNLOCKED
 							upgrade_sign.updated_state()
 							upgrade_sign.button.pressed.connect(func():
-								if Globals.save_file.truck_upgrades.has(flag):
+								if Globals.save_file.get_meta("ap_checked_shop_upgrades", []).has(check_location_id):
 									return
 								if not Globals.remove_euro(upgrade_sign.true_price):
 									upgrade_sign.poor()
