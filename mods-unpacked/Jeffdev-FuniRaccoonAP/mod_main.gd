@@ -221,6 +221,8 @@ func _on_node_added(node: Node) -> void:
 						else:
 							upgrade_sign.cur_state = truck_upgrade_sign.sign_states.UNLOCKED
 							upgrade_sign.updated_state()
+							upgrade_sign.button.disabled = false
+							upgrade_sign.check.hide()
 							upgrade_sign.button.pressed.connect(func():
 								if Globals.save_file.get_meta("ap_checked_shop_upgrades", []).has(check_location_id):
 									return
@@ -266,6 +268,16 @@ func _on_node_added(node: Node) -> void:
 
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/hub_world/item_spawner.gd" and Globals.save_file.is_the_future:
 		node.set_script(null)
+
+	if node.has_method("add_money"):
+		node.ready.connect(func():
+			var money_id: String = node.get("money_id") if node.get("money_id") != null else ""
+			if not ap_client.EURO_LOCATION_IDS.has(money_id):
+				return
+			node.get_parent().connect("eaten_signal", func(_player):
+				ap_client.euro_collected(money_id)
+			)
+		)
 
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/cat/find_cat_quest.gd":
 		node.ready.connect(func():

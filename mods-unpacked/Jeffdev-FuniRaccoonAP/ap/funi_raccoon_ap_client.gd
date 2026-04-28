@@ -99,6 +99,68 @@ const JEWEL_LOCATION_IDS: Dictionary = {
 	"jewel_4_eaten": 7004,
 }
 
+## Maps money.gd money_id strings (str(get_path()) + str(value)) to AP location IDs.
+const EURO_LOCATION_IDS: Dictionary = {
+	# Norwich (scene root: GymDay)
+	"/root/GymDay/money/money5":                      8001, # Norwich: Euro at train station
+	"/root/GymDay/moneys/money/money25":              8002, # Norwich: Euro at chicken farm island
+	# Chicken Farm (scene root: Level_Container)
+	"/root/Level_Container/money/money5":             8003, # Chicken Farm: Euro on pillar
+	# Gym (scene root: gym)
+	"/root/gym/money/money5":                         8004, # Gym: Euro on roof with vending machine
+	"/root/gym/money3/money20":                       8005, # Gym: Euro behind building
+	"/root/gym/money2/money50":                       8006, # Gym: Euro at the end of train tracks
+	"/root/gym/money4/money100":                      8007, # Gym: Euro on bee sign under clouds
+	# Tyre Shop (scene root: Node3D)
+	"/root/Node3D/money/money1":       				  8008, # Tyre Shop: Euro on roof of entrance
+	# Water Zone (scene root: Level)
+	"/root/Level/money2/money50":                     8009, # Water Zone: Euro under stairs underwater
+	# Beenie Death (scene root: beenieDiesOnTheCross)
+	"/root/beenieDiesOnTheCross/money/money20":       8010, # Beenie Death: Euro behind cross
+	# Canyon (scene root: Canyon)
+	"/root/Canyon/money/money1":                      8011, # Canyon: Euro on the edge of canyon
+	# Parking Lot / Trasco (scene root: TrascoCarpark)
+	"/root/TrascoCarpark/money/money150":             8012, # Trasco: Euro on edge wall 1
+	"/root/TrascoCarpark/money2/money150":            8013, # Trasco: Euro on edge wall 2
+	"/root/TrascoCarpark/money3/money150":            8014, # Trasco: Euro on edge wall 3
+	# Blimbo City (scene root: City)
+	"/root/City/MoneyHolder/money/money100":          8015, # City: Euro on watertower
+	"/root/City/MoneyHolder/money2/money20":          8016, # City: Euro near boat on edge of city
+	"/root/City/Bellboyevent/money2/money5":          8017, # City: Euro near Robin P. Bobin Store
+	"/root/City/Bellboyevent/money3/money5":          8018, # City: Euro net to Robin P. Bobin Store
+	"/root/City/Bellboyevent/money4/money5":          8019, # City: Euro near Guns stands
+	"/root/City/Bellboyevent/money5/money5":          8020, # City: Euro under city on girders 1
+	"/root/City/Bellboyevent/money6/money5":          8021, # City: Euro under city on girders 2
+	"/root/City/Bellboyevent/money7/money5":          8022, # City: Euro under city on girders 3
+	"/root/City/Bellboyevent/money8/money5":          8023, # City: Euro under city on girders 4
+	"/root/City/Bellboyevent/money9/money5":          8024, # City: Euro near cheese wheel
+	# Blimbo Village (scene root: Blimbo)
+	"/root/Blimbo/money2/money25":                    8025, # Village: Euro on castle
+	"/root/Blimbo/money/money1":                      8026, # Village: Euro near furnace
+	# Desert Connections / Wastes (scene root: MeshInstance3D)
+	"/root/MeshInstance3D/moneys/money/money1":       8027, # Wastes: Euro on top of breakfast building
+	"/root/MeshInstance3D/moneys/money2/money1":      8028, # Wastes: Euro on top of chinese building
+	"/root/MeshInstance3D/moneys/money7/money1":      8029, # Wastes: Euro on lower end of chinese building
+	"/root/MeshInstance3D/moneys/money3/money1":      8030, # Wastes: Euro on sad therapy sign building
+	"/root/MeshInstance3D/moneys/money4/money1":      8031, # Wastes: Euro nearby mystical dumbbell in flowers
+	"/root/MeshInstance3D/moneys/money5/money1":      8032, # Wastes: Euro on road edge
+	"/root/MeshInstance3D/moneys/money6/money1":      8033, # Wastes: Euro on dead blimbos building
+	# Desert Level (scene root: Desert_Level)
+	"/root/Desert_Level/money/money1":                8034, # Desert: Euro on tilted building
+	"/root/Desert_Level/money2/money1":               8035, # Desert: Euro in moai head pool 1
+	"/root/Desert_Level/money3/money1":               8036, # Desert: Euro in moai head pool 2
+	"/root/Desert_Level/money4/money1":               8037, # Desert: Euro in moai head pool 3
+	"/root/Desert_Level/money5/money1":               8038, # Desert: Euro in moai head pool 4
+	"/root/Desert_Level/money6/money1":               8039, # Desert: Euro in moai head pool 5
+	"/root/Desert_Level/money7/money1":               8040, # Desert: Euro in moai head pool 6
+	"/root/Desert_Level/money8/money1":               8041, # Desert: Euro on pillar near MFC
+	"/root/Desert_Level/money10/money1":              8042, # Desert: Euro on yellow house roof in fridge land
+	"/root/Desert_Level/money9/money1":               8043, # Desert: Euro in New Buisness HQ
+	"/root/Desert_Level/money11/money1":              8044, # Desert: Euro on top of fridge land skull
+	"/root/Desert_Level/money12/money1":              8045, # Desert: Euro on on blue house roof in fridge land
+	"/root/Desert_Level/money13/money1":              8046, # Desert: Euro in BLMB nuclear reactor
+}
+
 ## Maps item_tracker.item_id enum values to AP location IDs.
 const ITEM_ID_TO_AP_LOCATION: Dictionary = {
 	item_tracker.item_id.MOAI:                     LOCATION_ID_BASE + 1,
@@ -429,6 +491,7 @@ func sync_stored_items() -> void:
 	_sync_checks("ap_checked_cats")
 	_sync_checks("ap_checked_hats")
 	_sync_checks("ap_checked_jewels")
+	_sync_checks("ap_checked_euros")
 
 func dumbbell_eaten(collectable_id: String) -> void:
 	if not DUMBBELL_LOCATION_IDS.has(collectable_id):
@@ -496,6 +559,14 @@ func jewel_collected(jewel_flag: String) -> void:
 		return
 	ModLoaderLog.info("Jewel collected: flag='%s' location_id=%d" % [jewel_flag, location_id], _LOG)
 	_send_check("ap_checked_jewels", location_id)
+
+func euro_collected(money_id: String) -> void:
+	var location_id: int = EURO_LOCATION_IDS.get(money_id, 0)
+	if location_id == 0:
+		ModLoaderLog.warning("euro_collected: no AP location for money_id='%s'" % money_id, _LOG)
+		return
+	ModLoaderLog.info("Euro collected: money_id='%s' location_id=%d" % [money_id, location_id], _LOG)
+	_send_check("ap_checked_euros", location_id)
 
 func item_stored(id: item_tracker.item_id) -> void:
 	if not ITEM_ID_TO_AP_LOCATION.has(id):
