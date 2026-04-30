@@ -10,6 +10,14 @@ const _LOG = "Jeffdev-FuniRaccoonAP/FuniRaccoonApClient"
 ## Base offset for all Funi Raccoon Game location IDs in the AP multiworld.
 const LOCATION_ID_BASE = 1000
 
+## Maps numeric goal values from slot_data to goal name strings.
+const GOAL_ID_TO_NAME: Dictionary = {
+	0: "museum",
+	1: "fellowship",
+	2: "lugh",
+	3: "orb",
+}
+
 const PROGRESSIVE_DUMBBELL_AP_ITEM_ID = 400
 const PROGRESSIVE_COOLING_ROD_AP_ITEM_ID = 94
 
@@ -571,7 +579,8 @@ func check_goal() -> void:
 		return
 	if Globals.save_file.get_meta("ap_goal_complete", false):
 		return
-	var goal: String = str(slot_data.get("goal", "museum")).to_lower()
+	var goal_raw = slot_data.get("goal", 0)
+	var goal: String = GOAL_ID_TO_NAME.get(int(goal_raw), str(goal_raw).to_lower())
 	var stored: Array = Globals.save_file.items_stored
 	var dumpster_count: int = Globals.save_file.get_meta("ap_stored_items", []).size()
 	var met := false

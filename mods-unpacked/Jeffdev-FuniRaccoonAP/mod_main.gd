@@ -319,19 +319,6 @@ func _on_node_added(node: Node) -> void:
 				)
 		)
 
-	# Priestess church construction
-	if node.get_script() != null and node.get_script().resource_path == "res://Models/priest/preist_logic.gd":
-		node.ready.connect(func():
-			var priestess_script = node.get_script()
-			node.interact_area.interacted.disconnect(node.play_talk)
-			node.interact_area.interacted.connect(func(player):
-				if not Globals.save_file.items_stored.has(item_tracker.item_id.PRIESTESS):
-					ModLoaderLog.info("Priestess church blocked: need PRIESTESS item from AP.", LOG_NAME)
-					return
-				priestess_script.play_talk(player)
-			)
-		)
-
 	# Goo Office exit to Blimbo City
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/LongOffice/escape_to_blimbo_city.gd":
 		node.ready.connect(func():
@@ -357,19 +344,6 @@ func _on_node_added(node: Node) -> void:
 					ModLoaderLog.info("Crisp sideplot blocked: need CRISP item from AP.", LOG_NAME)
 					return
 				crisp_script.real_windmill_detected(area)
-			)
-		)
-
-	# Butterfly
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/cliffs_of_nowher/butterFLY.gd":
-		node.ready.connect(func():
-			var butterfly_script = node.get_script()
-			node.butterfly_mesh.pick_signal.disconnect(node.change_player_gravity)
-			node.butterfly_mesh.pick_signal.connect(func(player):
-				if not Globals.save_file.items_stored.has(item_tracker.item_id.BUTTERFLY):
-					ModLoaderLog.info("Butterfly float blocked: need BUTTERFLY item from AP.", LOG_NAME)
-					return
-				butterfly_script.change_player_gravity(player)
 			)
 		)
 
@@ -425,19 +399,28 @@ func _on_node_added(node: Node) -> void:
 
 	# Block Items until they are received
 
+	# Priestess church construction
+	if node.get_script() != null and node.get_script().resource_path == "res://Models/priest/preist_logic.gd":
+		node.ready.connect(func():
+			var priestess_script = node.get_script()
+			node.interact_area.interacted.disconnect(node.play_talk)
+			node.interact_area.interacted.connect(func(player):
+				if not Globals.save_file.items_stored.has(item_tracker.item_id.PRIESTESS):
+					ModLoaderLog.info("Priestess church blocked: need PRIESTESS item from AP.", LOG_NAME)
+					return
+				priestess_script.play_talk(player)
+			)
+		)
+
 	# Vending Machine
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/vending_machine/VendingMachine.gd":
 		node.ready.connect(func():
-			node.vendingmachine_use_signal.connect(func(player: PlayerScript):
-				if node.in_progress:
-					return
-
+			var root = node.get_parent()
+			root.use_signal.disconnect(node._on_vendingmachine_use_signal)
+			root.use_signal.connect(func(player: PlayerScript):
 				if not Globals.save_file.items_stored.has(item_tracker.item_id.VENDING_MACHINE):
-					ModLoaderLog.info("Vending machine blocked: need to receive item index %d from AP." % ap_client.VENDING_MACHINE_ITEM_INDEX, LOG_NAME)
-					node.in_progress = false
+					ModLoaderLog.info("Vending machine blocked: VENDING_MACHINE not received from AP.", LOG_NAME)
 					return
-
-				node.in_progress = true
 				node._on_vendingmachine_use_signal(player)
 			)
 		)
@@ -471,45 +454,55 @@ func _on_node_added(node: Node) -> void:
 	# Brob Energy
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/brob_energy/energy.gd":
 		node.ready.connect(func():
-			var brob_energy_script = node.get_script()
 			node.brob_energy.pick_signal.disconnect(node._on_picked_up)
 			node.brob_energy.throw_signal.disconnect(node._on_throw_object)
 			node.brob_energy.pick_signal.connect(func(_player):
 				if not Globals.save_file.items_stored.has(item_tracker.item_id.BROB_ENERGY):
-					ModLoaderLog.info("Brob Energy blocked: need to receive item index %d from AP." % ap_client.BROB_ENERGY_ITEM_INDEX, LOG_NAME)
+					ModLoaderLog.info("Brob Energy blocked: BROB_ENERGY not received from AP.", LOG_NAME)
 					return
-				brob_energy_script._on_picked_up(_player)
+				node._on_picked_up(_player)
 			)
 			node.brob_energy.throw_signal.connect(func(_player):
-				brob_energy_script._on_throw_object(_player)
+				node._on_throw_object(_player)
 			)
 		)
 
 	# Goo
 	if node.get_script() != null and node.get_script().resource_path == "res://Models/goo/goo_logic.gd":
 		node.ready.connect(func():
-			var goo_script = node.get_script()
 			node.parent_interact.pick_signal.disconnect(node.picked_up)
 			node.parent_interact.pick_signal.connect(func(player):
 				if not Globals.save_file.items_stored.has(item_tracker.item_id.GOO):
 					ModLoaderLog.info("Goo bounce blocked: need GOO item from AP.", LOG_NAME)
 					return
-				goo_script.picked_up(player)
+				node.picked_up(player)
 			)
 		)
 
 	# Chicken
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/chicken/chicken.gd":
 		node.ready.connect(func():
-			var chicken_script = node.get_script()
 			node.pick_signal.disconnect(node._on_pick_signal)
 			node.pick_signal.connect(func(player):
 				if not Globals.save_file.items_stored.has(item_tracker.item_id.CHICKEN):
 					ModLoaderLog.info("Chicken float blocked: need CHICKEN item from AP.", LOG_NAME)
 					return
-				chicken_script._on_pick_signal(player)
+				node._on_pick_signal(player)
 			)
 		)
+
+	# Butterfly
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/cliffs_of_nowher/butterFLY.gd":
+		node.ready.connect(func():
+			node.butterfly_mesh.pick_signal.disconnect(node.change_player_gravity)
+			node.butterfly_mesh.pick_signal.connect(func(player):
+				if not Globals.save_file.items_stored.has(item_tracker.item_id.BUTTERFLY):
+					ModLoaderLog.info("Butterfly float blocked: need BUTTERFLY item from AP.", LOG_NAME)
+					return
+				node.change_player_gravity(player)
+			)
+		)
+
 
 func _on_quit_pressed() -> void:
 	ModLoaderLog.info("Quit pressed, disconnecting from AP.", LOG_NAME)
