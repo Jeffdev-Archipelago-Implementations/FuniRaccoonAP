@@ -43,12 +43,6 @@ func _ready() -> void:
 	add_child(ap_client)
 
 	ModLoaderLog.success("AP client ready v%s" % MOD_VERSION, LOG_NAME)
-
-	if config_data.get("ap_server", "") != "" and config_data.get("ap_player", "") != "":
-		ModLoaderLog.info("Auto-connecting to %s as %s" % [config_data["ap_server"], config_data["ap_player"]], LOG_NAME)
-		#ap_client.connect_to_multiworld()
-	else:
-		ModLoaderLog.info("No connection info found, skipping auto-connect.", LOG_NAME)
 		
 	var ApConnectPanelScript = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_connect_panel.tscn")
 	var connect_panel = ApConnectPanelScript.instantiate()
@@ -56,6 +50,11 @@ func _ready() -> void:
 	add_child(connect_panel)
 	
 	get_tree().node_added.connect(_on_node_added)
+
+	LevelChanger.level_Changed.connect(func(level_id: level_changer.LEVEL_ID):
+		if level_id == level_changer.LEVEL_ID.CREDITS_LEVEL:
+			ap_client.check_goal()
+	)
 
 func _on_node_added(node: Node) -> void:
 	if node.name == "Quit" and node.get_script() != null:
@@ -116,18 +115,6 @@ func _on_node_added(node: Node) -> void:
 					child.item.position.y = child.item.height / 2
 		)
 
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/monitor_room/weight_spawner.gd":
-		node.ready.connect(func():
-			node.area_3d.body_entered.connect(func(body: Node3D):
-				if body.name != "Weight":
-					return
-				await node.animation_player.animation_finished
-				if Globals.save_file.items_stored.has(item_tracker.item_id.COOLING_ROD_FRIDGE_KING) and Globals.save_file.items_stored.has(item_tracker.item_id.COOLING_ROD_PLIMBO) and Globals.save_file.items_stored.has(item_tracker.item_id.COOLING_ROD):
-					ModLoaderLog.info("Orb ending complete, sending goal.", LOG_NAME)
-					ap_client.set_status(ApTypes.ClientStatus.CLIENT_GOAL)
-			)
-		)
-
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/keiTruck/stunt_tracker.gd":
 		node.ready.connect(func():
 			node.hit_ground.connect(func():
@@ -152,6 +139,8 @@ func _on_node_added(node: Node) -> void:
 						obj.queue_free()
 					player.holding = false
 					player.carrying_weight = 0
+					if pickup.menu_updater != null:
+						pickup.menu_updater.remove_object_icons()
 
 			node.set_process_input(false)
 			var guard = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/level_access_guard.gd").new()
@@ -180,6 +169,8 @@ func _on_node_added(node: Node) -> void:
 				if body is not InteractData:
 					return
 				if body.obj_id == item_tracker.item_id.KEI_TRUCK:
+					return
+				if LevelChanger.current_level.level_id == level_changer.LEVEL_ID.MAIN_MENU:
 					return
 				body.item_in_dumpster.emit()
 				var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
@@ -265,7 +256,15 @@ func _on_node_added(node: Node) -> void:
 						ModLoaderLog.info("Orb store blocked: ORB not received from AP.", LOG_NAME)
 				)
 			)
+		elif path == "res://Scene/Levels/BehrmanRacetrack/time_track.gd":
+			node.ready.connect(func():
+				node.finish.race_done.connect(func():
+					if node.time <= 90.0:
+						ap_client.speedway_completed()
+				)
+			)
 
+	# Turn off the dumpster item spawner in the future
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/hub_world/item_spawner.gd" and Globals.save_file.is_the_future:
 		node.set_script(null)
 
@@ -287,16 +286,228 @@ func _on_node_added(node: Node) -> void:
 		)
 
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/hats/hat_collect.gd":
+		var hat_id = node.hat_id
+		var location_id: int = ap_client.HAT_LOCATION_IDS.get(hat_id, 0)
+		var player_collected: bool = Globals.save_file.get_meta("ap_checked_hats", []).has(location_id)
+		var ap_received: bool = Globals.save_file.unlocked_hats.has(hat_id)
+		if ap_received and not player_collected:
+			Globals.save_file.unlocked_hats.erase(hat_id)
 		node.ready.connect(func():
-			node.item_hat_data.eaten_signal.connect(func(_player):
-				ap_client.hat_collected(node.hat_id)
-			)
+			if ap_received and not player_collected:
+				if not Globals.save_file.unlocked_hats.has(hat_id):
+					Globals.save_file.unlocked_hats.append(hat_id)
+			if is_instance_valid(node.item_hat_data):
+				node.item_hat_data.eaten_signal.connect(func(_player):
+					ap_client.hat_collected(hat_id)
+				)
 		)
 
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/Jewel_One/jewel.gd":
+		var jewel_flag = node.jewel_flag
+		var location_id: int = ap_client.JEWEL_LOCATION_IDS.get(jewel_flag, 0)
+		var player_collected: bool = Globals.save_file.get_meta("ap_checked_jewels", []).has(location_id)
+		var ap_received: bool = Globals.save_file.states_occurred.has(jewel_flag)
+		if ap_received and not player_collected:
+			Globals.save_file.states_occurred.erase(jewel_flag)
 		node.ready.connect(func():
-			node.jewel.eaten_signal.connect(func(_player):
-				ap_client.jewel_collected(node.jewel_flag)
+			if ap_received and not player_collected:
+				if not Globals.save_file.states_occurred.has(jewel_flag):
+					Globals.save_file.states_occurred.append(jewel_flag)
+			if is_instance_valid(node.jewel):
+				node.jewel.eaten_signal.connect(func(_player):
+					ap_client.jewel_collected(jewel_flag)
+				)
+		)
+
+	# Priestess church construction
+	if node.get_script() != null and node.get_script().resource_path == "res://Models/priest/preist_logic.gd":
+		node.ready.connect(func():
+			var priestess_script = node.get_script()
+			node.interact_area.interacted.disconnect(node.play_talk)
+			node.interact_area.interacted.connect(func(player):
+				if not Globals.save_file.items_stored.has(item_tracker.item_id.PRIESTESS):
+					ModLoaderLog.info("Priestess church blocked: need PRIESTESS item from AP.", LOG_NAME)
+					return
+				priestess_script.play_talk(player)
+			)
+		)
+
+	# Goo Office exit to Blimbo City
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/LongOffice/escape_to_blimbo_city.gd":
+		node.ready.connect(func():
+			var LevelAccessGuard = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/level_access_guard.gd")
+			node.pressy_button.button_pressed.disconnect(node.button_pressed)
+			node.pressy_button.button_pressed.connect(func():
+				var have: int = Globals.save_file.get_meta("ap_received_item_index", 0)
+				var required: int = LevelAccessGuard.get_required_for_level(level_changer.LEVEL_ID.BLIMBO_CITY)
+				if have < required:
+					ModLoaderLog.info("Goo Office exit blocked: need %d items, have %d." % [required, have], LOG_NAME)
+					return
+				node.button_pressed()
+			)
+		)
+
+	# Crisp undying love sideplot
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/crisp/CrispLogic.gd":
+		node.ready.connect(func():
+			var crisp_script = node.get_script()
+			node.windmill_detector.area_entered.disconnect(node.real_windmill_detected)
+			node.windmill_detector.area_entered.connect(func(area):
+				if not Globals.save_file.items_stored.has(item_tracker.item_id.CRISP):
+					ModLoaderLog.info("Crisp sideplot blocked: need CRISP item from AP.", LOG_NAME)
+					return
+				crisp_script.real_windmill_detected(area)
+			)
+		)
+
+	# Butterfly
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/cliffs_of_nowher/butterFLY.gd":
+		node.ready.connect(func():
+			var butterfly_script = node.get_script()
+			node.butterfly_mesh.pick_signal.disconnect(node.change_player_gravity)
+			node.butterfly_mesh.pick_signal.connect(func(player):
+				if not Globals.save_file.items_stored.has(item_tracker.item_id.BUTTERFLY):
+					ModLoaderLog.info("Butterfly float blocked: need BUTTERFLY item from AP.", LOG_NAME)
+					return
+				butterfly_script.change_player_gravity(player)
+			)
+		)
+
+	# Lugh Sun Quests
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/SunGod/sun_god_cliff.gd":
+		node.ready.connect(func():
+			node.player_entered.body_entered.disconnect(node.check_what_is_in_hand)
+			node.player_entered.body_entered.connect(func(body):
+				if not Globals.save_file.items_stored.has(node.item_id):
+					ModLoaderLog.info("Sun god quest blocked: need %s from AP." % item_tracker.item_id.keys()[node.item_id], LOG_NAME)
+					return
+				node.check_what_is_in_hand(body)
+			)
+		)
+
+	# Mines door (requires MINES_KEY)
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/BlimboVillage/open_door.gd":
+		node.ready.connect(func():
+			if Globals.save_file.states_occurred.has(flag_names.mines_door_open):
+				return
+			node.body_entered.disconnect(node.open_door)
+			node.body_entered.connect(func(obj):
+				if not Globals.save_file.items_stored.has(item_tracker.item_id.MINES_KEY):
+					ModLoaderLog.info("Mines door blocked: need MINES_KEY from AP.", LOG_NAME)
+					return
+				node.open_door(obj)
+			)
+		)
+
+	# Fridge save (requires FRIDGE_KEY)
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/fridge/fridge_logic.gd":
+		node.ready.connect(func():
+			node.interact_area.body_entered.disconnect(node.key_collected)
+			node.interact_area.body_entered.connect(func(obj):
+				if not Globals.save_file.items_stored.has(item_tracker.item_id.FRIDGE_KEY):
+					ModLoaderLog.info("Fridge blocked: need FRIDGE_KEY from AP.", LOG_NAME)
+					return
+				node.key_collected(obj)
+			)
+		)
+
+	# ATM (blocked in act 4 dumpster)
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/atm/ATMLogic.gd":
+		node.ready.connect(func():
+			node.interact_area.interacted.disconnect(node.show_atm_interface)
+			node.interact_area.interacted.connect(func(player: PlayerScript):
+				if Globals.save_file.is_the_future:
+					ModLoaderLog.info("ATM blocked: cannot use ATM in dumpster level.", LOG_NAME)
+					return
+				node.show_atm_interface(player)
+			)
+		)
+
+	# Block Items until they are received
+
+	# Vending Machine
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/vending_machine/VendingMachine.gd":
+		node.ready.connect(func():
+			node.vendingmachine_use_signal.connect(func(player: PlayerScript):
+				if node.in_progress:
+					return
+
+				if not Globals.save_file.items_stored.has(item_tracker.item_id.VENDING_MACHINE):
+					ModLoaderLog.info("Vending machine blocked: need to receive item index %d from AP." % ap_client.VENDING_MACHINE_ITEM_INDEX, LOG_NAME)
+					node.in_progress = false
+					return
+
+				node.in_progress = true
+				node._on_vendingmachine_use_signal(player)
+			)
+		)
+
+	# Gun
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/gun/gun_logic.gd":
+		node.ready.connect(func():
+			var gun_script = node.get_script()
+			node.a_gun.use_signal.disconnect(node._on_a_gun_use_signal)
+			node.a_gun.use_signal.connect(func(player):
+				if not Globals.save_file.items_stored.has(item_tracker.item_id.GUN):
+					ModLoaderLog.info("Gun blocked: need GUN item from AP.", LOG_NAME)
+					return
+				gun_script._on_a_gun_use_signal(player)
+			)
+		)
+
+	# Pickaxe
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/pickaxe/pickaxe.gd":
+		node.ready.connect(func():
+			var pickaxe_script = node.get_script()
+			node.pickaxe.use_signal.disconnect(node.pick_axe)
+			node.pickaxe.use_signal.connect(func(player):
+				if not Globals.save_file.items_stored.has(item_tracker.item_id.PICKAXE):
+					ModLoaderLog.info("Pickaxe swing blocked: need PICKAXE item from AP.", LOG_NAME)
+					return
+				pickaxe_script.pick_axe(player)
+			)
+		)
+
+	# Brob Energy
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/brob_energy/energy.gd":
+		node.ready.connect(func():
+			var brob_energy_script = node.get_script()
+			node.brob_energy.pick_signal.disconnect(node._on_picked_up)
+			node.brob_energy.throw_signal.disconnect(node._on_throw_object)
+			node.brob_energy.pick_signal.connect(func(_player):
+				if not Globals.save_file.items_stored.has(item_tracker.item_id.BROB_ENERGY):
+					ModLoaderLog.info("Brob Energy blocked: need to receive item index %d from AP." % ap_client.BROB_ENERGY_ITEM_INDEX, LOG_NAME)
+					return
+				brob_energy_script._on_picked_up(_player)
+			)
+			node.brob_energy.throw_signal.connect(func(_player):
+				brob_energy_script._on_throw_object(_player)
+			)
+		)
+
+	# Goo
+	if node.get_script() != null and node.get_script().resource_path == "res://Models/goo/goo_logic.gd":
+		node.ready.connect(func():
+			var goo_script = node.get_script()
+			node.parent_interact.pick_signal.disconnect(node.picked_up)
+			node.parent_interact.pick_signal.connect(func(player):
+				if not Globals.save_file.items_stored.has(item_tracker.item_id.GOO):
+					ModLoaderLog.info("Goo bounce blocked: need GOO item from AP.", LOG_NAME)
+					return
+				goo_script.picked_up(player)
+			)
+		)
+
+	# Chicken
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/chicken/chicken.gd":
+		node.ready.connect(func():
+			var chicken_script = node.get_script()
+			node.pick_signal.disconnect(node._on_pick_signal)
+			node.pick_signal.connect(func(player):
+				if not Globals.save_file.items_stored.has(item_tracker.item_id.CHICKEN):
+					ModLoaderLog.info("Chicken float blocked: need CHICKEN item from AP.", LOG_NAME)
+					return
+				chicken_script._on_pick_signal(player)
 			)
 		)
 

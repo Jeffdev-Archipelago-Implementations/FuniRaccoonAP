@@ -5,7 +5,7 @@ var _orb: Node
 # Minimum AP items received (ap_received_item_index) required per cluster.
 const CLUSTER_REQUIREMENTS: Dictionary = {
 	level_info.level_cluster_id.act2: 25,
-	level_info.level_cluster_id.act3: 30,
+	level_info.level_cluster_id.act3: 35,
 	level_info.level_cluster_id.act4: 50,
 }
 
@@ -13,6 +13,7 @@ const CLUSTER_REQUIREMENTS: Dictionary = {
 const LEVEL_REQUIREMENTS: Dictionary = {
 	level_changer.LEVEL_ID.MUSEUM:             15,
 	level_changer.LEVEL_ID.BLIMBO_CITY:        35,
+	level_changer.LEVEL_ID.RBMK:              50,
 	level_changer.LEVEL_ID.GULLY:             100,
 	level_changer.LEVEL_ID.SALMON_OF_KNOWLEDGE: 100,
 }

@@ -168,7 +168,6 @@ const ITEM_ID_TO_AP_LOCATION: Dictionary = {
 	item_tracker.item_id.FUN_BELLS:                LOCATION_ID_BASE + 3,
 	item_tracker.item_id.LAMA:                     LOCATION_ID_BASE + 4,
 	item_tracker.item_id.GYM:                      LOCATION_ID_BASE + 5,
-	item_tracker.item_id.KEI_TRUCK:                LOCATION_ID_BASE + 6,
 	item_tracker.item_id.VENDING_MACHINE:          LOCATION_ID_BASE + 7,
 	item_tracker.item_id.COIN:                     LOCATION_ID_BASE + 8,
 	item_tracker.item_id.RADIO:                    LOCATION_ID_BASE + 9,
@@ -322,7 +321,7 @@ func _ready() -> void:
 	super._ready()
 	connection_state_changed.connect(_on_connection_state_changed)
 
-func _maybe_show_popup(item_name: String, fallback: String, item_dict: Dictionary, show: bool) -> void:
+func _show_popup(item_name: String, fallback: String, item_dict: Dictionary, show: bool) -> void:
 	if not show:
 		return
 	var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_item_popup.gd")
@@ -377,7 +376,7 @@ func _on_received_items(command: Dictionary) -> void:
 			if Globals.save_file.strength >= 5.0:
 				Globals.get_achievement("ACH_FULL_BELLY")
 			changed = true
-			_maybe_show_popup(item_name, "Progressive Mystical Dumbbell", items[i], show_popups)
+			_show_popup(item_name, "Progressive Mystical Dumbbell", items[i], show_popups)
 		elif ap_item_id == PROGRESSIVE_COOLING_ROD_AP_ITEM_ID:
 			var next_rod := -1
 			for rod_id in COOLING_ROD_PROGRESSION:
@@ -395,7 +394,7 @@ func _on_received_items(command: Dictionary) -> void:
 				elif next_rod == item_tracker.item_id.COOLING_ROD_FRIDGE_KING and not Globals.save_file.cooling_rods.has("fridge_king"):
 					Globals.save_file.cooling_rods.append("fridge_king")
 				changed = true
-				_maybe_show_popup(item_name, "Progressive Cooling Rod", items[i], show_popups)
+				_show_popup(item_name, "Progressive Cooling Rod", items[i], show_popups)
 			else:
 				ModLoaderLog.warning("AP granted Progressive Cooling Rod but all three are already collected.", _LOG)
 		elif TRUCK_UPGRADE_ITEM_MAP.has(ap_item_id):
@@ -404,31 +403,31 @@ func _on_received_items(command: Dictionary) -> void:
 				Globals.save_file.truck_upgrades.append(flag)
 				changed = true
 				ModLoaderLog.info("AP granted truck upgrade '%s'." % flag, _LOG)
-				_maybe_show_popup(item_name, flag, items[i], show_popups)
+				_show_popup(item_name, flag, items[i], show_popups)
 		elif HAT_AP_ITEM_IDS.has(ap_item_id):
 			var hat_enum_id: int = HAT_AP_ITEM_IDS[ap_item_id]
 			if not Globals.save_file.unlocked_hats.has(hat_enum_id):
 				Globals.save_file.unlocked_hats.append(hat_enum_id)
 				changed = true
 				ModLoaderLog.info("AP granted hat enum_id=%d." % hat_enum_id, _LOG)
-				_maybe_show_popup(item_name, "Hat", items[i], show_popups)
+				_show_popup(item_name, "Hat", items[i], show_popups)
 		elif JEWEL_AP_ITEM_IDS.has(ap_item_id):
 			var jewel_flag: String = JEWEL_AP_ITEM_IDS[ap_item_id]
 			if not Globals.save_file.states_occurred.has(jewel_flag):
 				Globals.save_file.states_occurred.append(jewel_flag)
 				changed = true
 				ModLoaderLog.info("AP granted jewel flag='%s'." % jewel_flag, _LOG)
-				_maybe_show_popup(item_name, "Mystical Jewel", items[i], show_popups)
+				_show_popup(item_name, "Mystical Jewel", items[i], show_popups)
 		elif ap_item_id == EURO_10_AP_ITEM_ID:
 			Globals.add_euro(10.0)
 			changed = true
 			ModLoaderLog.info("AP granted 10 Euro.", _LOG)
-			_maybe_show_popup(item_name, "10 Euro", items[i], show_popups)
+			_show_popup(item_name, "10 Euro", items[i], show_popups)
 		elif ap_item_id == EURO_100_AP_ITEM_ID:
 			Globals.add_euro(100.0)
 			changed = true
 			ModLoaderLog.info("AP granted 100 Euro.", _LOG)
-			_maybe_show_popup(item_name, "100 Euro", items[i], show_popups)
+			_show_popup(item_name, "100 Euro", items[i], show_popups)
 		elif ITEM_ID_TO_AP_LOCATION.has(ap_item_id):
 			if not Globals.save_file.items_stored.has(ap_item_id):
 				_receiving_from_ap = true
@@ -436,7 +435,7 @@ func _on_received_items(command: Dictionary) -> void:
 				Globals.dumpster_added_item.emit()
 				_receiving_from_ap = false
 				changed = true
-				_maybe_show_popup(item_name, str(ap_item_id), items[i], show_popups)
+				_show_popup(item_name, str(ap_item_id), items[i], show_popups)
 		else:
 			ModLoaderLog.info("AP item id=%d ('%s') has no handler, skipping." % [ap_item_id, item_name], _LOG)
 
@@ -445,7 +444,6 @@ func _on_received_items(command: Dictionary) -> void:
 
 	if changed:
 		Globals.save_game()
-
 
 func _get_player_name(player_slot: int) -> String:
 	for p in players:
@@ -567,6 +565,54 @@ func euro_collected(money_id: String) -> void:
 		return
 	ModLoaderLog.info("Euro collected: money_id='%s' location_id=%d" % [money_id, location_id], _LOG)
 	_send_check("ap_checked_euros", location_id)
+
+func check_goal() -> void:
+	if connect_state != ConnectState.CONNECTED_TO_MULTIWORLD:
+		return
+	if Globals.save_file.get_meta("ap_goal_complete", false):
+		return
+	var goal: String = str(slot_data.get("goal", "museum")).to_lower()
+	var stored: Array = Globals.save_file.items_stored
+	var dumpster_count: int = Globals.save_file.get_meta("ap_stored_items", []).size()
+	var met := false
+	match goal:
+		"orb":
+			met = (dumpster_count >= 50
+				and stored.has(item_tracker.item_id.ORB)
+				and stored.has(item_tracker.item_id.COOLING_ROD)
+				and stored.has(item_tracker.item_id.COOLING_ROD_PLIMBO)
+				and stored.has(item_tracker.item_id.COOLING_ROD_FRIDGE_KING)
+				and stored.has(item_tracker.item_id.KEI_TRUCK))
+		"museum":
+			met = (dumpster_count >= 100
+				and stored.has(item_tracker.item_id.WAFFLE)
+				and stored.has(item_tracker.item_id.COOLING_ROD)
+				and stored.has(item_tracker.item_id.COOLING_ROD_PLIMBO)
+				and stored.has(item_tracker.item_id.COOLING_ROD_FRIDGE_KING)
+				and stored.has(item_tracker.item_id.KEI_TRUCK))
+		"fellowship":
+			met = (dumpster_count >= 25
+				and stored.has(item_tracker.item_id.PRIESTESS)
+				and stored.has(item_tracker.item_id.GREENIE))
+		"lugh":
+			var occurred: Array = Globals.save_file.states_occurred
+			met = (dumpster_count >= 50
+				and occurred.has("jewel_1_eaten")
+				and occurred.has("jewel_2_eaten")
+				and occurred.has("jewel_3_eaten")
+				and occurred.has("jewel_4_eaten")
+				and stored.has(item_tracker.item_id.KEI_TRUCK))
+		_:
+			ModLoaderLog.warning("check_goal: unknown goal '%s', skipping." % goal, _LOG)
+	if met:
+		ModLoaderLog.info("Goal '%s' complete - sending CLIENT_GOAL." % goal, _LOG)
+		Globals.save_file.set_meta("ap_goal_complete", true)
+		Globals.save_game()
+		set_status(ApTypes.ClientStatus.CLIENT_GOAL)
+
+func speedway_completed() -> void:
+	ModLoaderLog.info("Behrman Speedway completed in time — sending check.", _LOG)
+	_send_check("ap_checked_speedway", LOCATION_ID_BASE + 8001)
 
 func item_stored(id: item_tracker.item_id) -> void:
 	if not ITEM_ID_TO_AP_LOCATION.has(id):

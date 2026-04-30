@@ -81,9 +81,9 @@ func _ready() -> void:
 	tween.tween_property(label, "modulate:a", 1.0, 0.25)
 	tween.tween_property(label, "position:y", label.position.y + 20.0, 0.25).set_ease(Tween.EASE_OUT)
 	tween.tween_interval(4)
-	tween.tween_property(label, "modulate:a", 0.0, 0.4)
 	tween.tween_callback(func():
 		var t2 := create_tween()
-		t2.tween_property(sender_label, "modulate:a", 0.0, 0.4)
+		t2.tween_property(label, "modulate:a", 0.0, 0.4)
+		t2.parallel().tween_property(sender_label, "modulate:a", 0.0, 0.4)
 		t2.tween_callback(queue_free)
 	)
