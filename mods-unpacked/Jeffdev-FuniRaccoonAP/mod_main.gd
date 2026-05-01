@@ -259,7 +259,7 @@ func _on_node_added(node: Node) -> void:
 		elif path == "res://Scene/Levels/BehrmanRacetrack/time_track.gd":
 			node.ready.connect(func():
 				node.finish.race_done.connect(func():
-					if node.time <= 90.0:
+					if node.time <= 60.0:
 						ap_client.speedway_completed()
 				)
 			)
@@ -416,13 +416,16 @@ func _on_node_added(node: Node) -> void:
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/vending_machine/VendingMachine.gd":
 		node.ready.connect(func():
 			var root = node.get_parent()
-			root.use_signal.disconnect(node._on_vendingmachine_use_signal)
-			root.use_signal.connect(func(player: PlayerScript):
-				if not Globals.save_file.items_stored.has(item_tracker.item_id.VENDING_MACHINE):
-					ModLoaderLog.info("Vending machine blocked: VENDING_MACHINE not received from AP.", LOG_NAME)
-					return
-				node._on_vendingmachine_use_signal(player)
-			)
+			var area = root.get_node_or_null("Area3D")
+			if is_instance_valid(area):
+				area.body_entered.disconnect(node._on_area_3d_body_entered)
+				var _item_tracker = item_tracker
+				area.body_entered.connect(func(body: Node3D):
+					if not Globals.save_file.items_stored.has(_item_tracker.item_id.VENDING_MACHINE):
+						ModLoaderLog.info("Vending machine (coin slot) blocked: VENDING_MACHINE not received from AP.", LOG_NAME)
+						return
+					node._on_area_3d_body_entered(body)
+				)
 		)
 
 	# Gun
@@ -441,13 +444,12 @@ func _on_node_added(node: Node) -> void:
 	# Pickaxe
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/pickaxe/pickaxe.gd":
 		node.ready.connect(func():
-			var pickaxe_script = node.get_script()
 			node.pickaxe.use_signal.disconnect(node.pick_axe)
 			node.pickaxe.use_signal.connect(func(player):
 				if not Globals.save_file.items_stored.has(item_tracker.item_id.PICKAXE):
 					ModLoaderLog.info("Pickaxe swing blocked: need PICKAXE item from AP.", LOG_NAME)
 					return
-				pickaxe_script.pick_axe(player)
+				node.pick_axe(player)
 			)
 		)
 
@@ -480,14 +482,15 @@ func _on_node_added(node: Node) -> void:
 		)
 
 	# Chicken
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/chicken/chicken.gd":
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/chicken/chicken_logic.gd":
 		node.ready.connect(func():
-			node.pick_signal.disconnect(node._on_pick_signal)
-			node.pick_signal.connect(func(player):
+			var chicken = node.get_parent()
+			chicken.pick_signal.disconnect(node._on_chicken_pick_signal)
+			chicken.pick_signal.connect(func(player):
 				if not Globals.save_file.items_stored.has(item_tracker.item_id.CHICKEN):
 					ModLoaderLog.info("Chicken float blocked: need CHICKEN item from AP.", LOG_NAME)
 					return
-				node._on_pick_signal(player)
+				node._on_chicken_pick_signal(player)
 			)
 		)
 
