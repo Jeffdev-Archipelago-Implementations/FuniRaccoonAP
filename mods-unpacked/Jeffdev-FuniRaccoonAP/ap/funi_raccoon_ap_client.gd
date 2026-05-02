@@ -405,6 +405,15 @@ func _on_received_items(command: Dictionary) -> void:
 				_show_popup(item_name, "Progressive Cooling Rod", items[i], show_popups)
 			else:
 				ModLoaderLog.warning("AP granted Progressive Cooling Rod but all three are already collected.", _LOG)
+		elif ap_item_id == item_tracker.item_id.KEI_TRUCK:
+			if not Globals.save_file.items_stored.has(item_tracker.item_id.KEI_TRUCK):
+				_receiving_from_ap = true
+				Globals.save_file.items_stored.append(item_tracker.item_id.KEI_TRUCK)
+				Globals.dumpster_added_item.emit()
+				_receiving_from_ap = false
+				changed = true
+				ModLoaderLog.info("AP granted Kei Truck.", _LOG)
+				_show_popup(item_name, "Kei Truck", items[i], show_popups)
 		elif TRUCK_UPGRADE_ITEM_MAP.has(ap_item_id):
 			var flag: String = TRUCK_UPGRADE_ITEM_MAP[ap_item_id]
 			if not Globals.save_file.truck_upgrades.has(flag):
