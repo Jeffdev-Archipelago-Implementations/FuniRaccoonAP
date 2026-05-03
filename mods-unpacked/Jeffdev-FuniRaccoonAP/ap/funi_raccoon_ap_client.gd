@@ -325,9 +325,80 @@ var _receiving_from_ap: bool = false
 # Suppresses popups during the initial ReceivedItems sync on connect.
 var _ready_for_popups: bool = false
 
+const AP_COLORS: Dictionary = {
+	"red":       "#EE0000",
+	"green":     "#00FF7F",
+	"yellow":    "#FAFAD2",
+	"blue":      "#6495ED",
+	"magenta":   "#EE00EE",
+	"cyan":      "#00EEEE",
+	"white":     "#DDDDDD",
+	"black":     "#222222",
+	"slateblue": "#6D8BE8",
+	"salmon":    "#FA8072",
+	"plum":      "#AF99EF",
+}
+
 func _ready() -> void:
 	super._ready()
 	connection_state_changed.connect(_on_connection_state_changed)
+	websocket_client.on_print_json.connect(_on_print_json)
+
+func _on_print_json(command: Dictionary) -> void:
+	var parts: Array = command.get("data", [])
+	if parts.is_empty():
+		return
+	var bbcode := ""
+	for part in parts:
+		var text: String = str(part.get("text", ""))
+		if text.is_empty():
+			continue
+		var color: String = str(part.get("color", ""))
+		var part_type: String = str(part.get("type", "text"))
+
+		# Resolve numeric IDs to human-readable names
+		match part_type:
+			"player_id":
+				text = _get_player_name(int(text))
+			"item_id":
+				if data_package:
+					var item_id := int(text)
+					var name_val = data_package.item_id_to_name.get(item_id,
+						data_package.item_id_to_name.get(float(item_id), null))
+					if name_val != null:
+						text = str(name_val)
+			"location_id":
+				if data_package:
+					var loc_id := int(text)
+					var name_val = data_package.location_id_to_name.get(loc_id,
+						data_package.location_id_to_name.get(float(loc_id), null))
+					if name_val != null:
+						text = str(name_val)
+
+		if color.is_empty():
+			match part_type:
+				"player_id", "player_name":
+					color = "slateblue"
+				"item_id", "item_name":
+					var flags: int = int(part.get("flags", 0))
+					if flags & 0b001:
+						color = "plum"
+					elif flags & 0b010:
+						color = "slateblue"
+					elif flags & 0b100:
+						color = "salmon"
+					else:
+						color = "cyan"
+				"location_id", "location_name":
+					color = "green"
+		if AP_COLORS.has(color):
+			bbcode += "[color=%s]%s[/color]" % [AP_COLORS[color], text]
+		else:
+			bbcode += text
+	if bbcode.strip_edges().is_empty():
+		return
+	var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
+	popup_script.show_message(bbcode, get_tree().get_root())
 
 func _show_popup(item_name: String, fallback: String, item_dict: Dictionary, show: bool) -> void:
 	if not show:
