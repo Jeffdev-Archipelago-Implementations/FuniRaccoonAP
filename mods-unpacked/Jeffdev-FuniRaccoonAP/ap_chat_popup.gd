@@ -3,7 +3,7 @@
 ## When a 6th message arrives the oldest (top) is evicted immediately.
 extends Node
 
-const MAX_MESSAGES = 5
+const MAX_MESSAGES = 4
 const MESSAGE_DURATION = 5.0
 
 static var _manager: CanvasLayer = null
@@ -34,8 +34,8 @@ static func _create_manager(root: Node) -> void:
 	_vbox.add_theme_constant_override("separation", 3)
 	_vbox.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	_vbox.offset_left = 20.0
-	_vbox.offset_right = 370.0  # 350px wide
-	_vbox.offset_top = -295.0   # tall enough for 5 rows
+	_vbox.offset_right = 395.0  # 375px wide
+	_vbox.offset_top = -295.0   # tall enough for 4 rows
 	_vbox.offset_bottom = -20.0
 
 	_manager.add_child(_vbox)
