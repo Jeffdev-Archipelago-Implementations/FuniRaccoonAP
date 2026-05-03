@@ -1,7 +1,7 @@
 extends Node
 
 const MOD_NAME = "Jeffdev-FuniRaccoonAP"
-const MOD_VERSION = "1.2.2"
+const MOD_VERSION = "1.2.3"
 const LOG_NAME = MOD_NAME + "/mod_main"
 const CONFIG_PATH = "user://ap_connect.json"
 
@@ -52,8 +52,15 @@ func _ready() -> void:
 	get_tree().node_added.connect(_on_node_added)
 
 	LevelChanger.level_Changed.connect(func(level_id: level_changer.LEVEL_ID):
-		if level_id == level_changer.LEVEL_ID.CREDITS_LEVEL:
-			ap_client.check_goal()
+		match level_id:
+			level_changer.LEVEL_ID.ORB_ENDING:
+				ap_client.check_goal("orb")
+			level_changer.LEVEL_ID.ENDING_ALL_ITEMS:
+				ap_client.check_goal("museum")
+			level_changer.LEVEL_ID.BEENIE_BRANCH:
+				ap_client.check_goal("fellowship")
+			level_changer.LEVEL_ID.HYPERCUBE_TREE_ENDING:
+				ap_client.check_goal("lugh")
 	)
 
 func _on_node_added(node: Node) -> void:

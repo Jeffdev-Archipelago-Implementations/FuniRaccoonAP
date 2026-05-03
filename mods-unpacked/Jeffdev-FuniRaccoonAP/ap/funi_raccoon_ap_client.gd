@@ -654,18 +654,31 @@ func euro_collected(money_id: String) -> void:
 	ModLoaderLog.info("Euro collected: money_id='%s' location_id=%d" % [money_id, location_id], _LOG)
 	_send_check("ap_checked_euros", location_id)
 
-func check_goal() -> void:
+func check_goal(expected_goal: String = "") -> void:
 	if connect_state != ConnectState.CONNECTED_TO_MULTIWORLD:
+		ModLoaderLog.info("check_goal: not connected, skipping.", _LOG)
 		return
 	if Globals.save_file.get_meta("ap_goal_complete", false):
+		ModLoaderLog.info("check_goal: already complete, skipping.", _LOG)
 		return
 	var goal_raw = slot_data.get("goal", 0)
 	var goal: String = GOAL_ID_TO_NAME.get(int(goal_raw), str(goal_raw).to_lower())
+	if expected_goal != "" and goal != expected_goal:
+		ModLoaderLog.info("check_goal: expected '%s' but slot goal is '%s', skipping." % [expected_goal, goal], _LOG)
+		return
 	var stored: Array = Globals.save_file.items_stored
 	var dumpster_count: int = Globals.save_file.get_meta("ap_stored_items", []).size()
+	ModLoaderLog.info("check_goal: goal='%s' dumpster=%d stored=%s" % [goal, dumpster_count, str(stored)], _LOG)
 	var met := false
 	match goal:
 		"orb":
+			ModLoaderLog.info("check_goal orb: ORB=%s COOLING_ROD=%s PLIMBO=%s FRIDGE_KING=%s KEI_TRUCK=%s" % [
+				str(stored.has(item_tracker.item_id.ORB)),
+				str(stored.has(item_tracker.item_id.COOLING_ROD)),
+				str(stored.has(item_tracker.item_id.COOLING_ROD_PLIMBO)),
+				str(stored.has(item_tracker.item_id.COOLING_ROD_FRIDGE_KING)),
+				str(stored.has(item_tracker.item_id.KEI_TRUCK))
+			], _LOG)
 			met = (dumpster_count >= 50
 				and stored.has(item_tracker.item_id.ORB)
 				and stored.has(item_tracker.item_id.COOLING_ROD)
@@ -690,7 +703,8 @@ func check_goal() -> void:
 				and occurred.has("jewel_2_eaten")
 				and occurred.has("jewel_3_eaten")
 				and occurred.has("jewel_4_eaten")
-				and stored.has(item_tracker.item_id.KEI_TRUCK))
+				and stored.has(item_tracker.item_id.KEI_TRUCK)
+				and stored.has(item_tracker.item_id.GUN))
 		_:
 			ModLoaderLog.warning("check_goal: unknown goal '%s', skipping." % goal, _LOG)
 	if met:
