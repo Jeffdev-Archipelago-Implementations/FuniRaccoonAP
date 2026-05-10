@@ -1,7 +1,7 @@
 extends Node
 
 const MOD_NAME = "Jeffdev-FuniRaccoonAP"
-const MOD_VERSION = "1.2.3"
+const MOD_VERSION = "1.2.4"
 const LOG_NAME = MOD_NAME + "/mod_main"
 const CONFIG_PATH = "user://ap_connect.json"
 
@@ -191,6 +191,8 @@ func _on_node_added(node: Node) -> void:
 					var pickup = body.get_node_or_null("pivotCotainer/PickupPivot")
 					if pickup is pickup_logic:
 						pickup.Delete_Items_In_Hand()
+						if pickup.menu_updater != null:
+							pickup.menu_updater.remove_object_icons()
 			)
 		)
 

@@ -362,18 +362,16 @@ func _on_print_json(command: Dictionary) -> void:
 				text = _get_player_name(int(text))
 			"item_id":
 				if data_package:
-					var item_id := int(text)
-					var name_val = data_package.item_id_to_name.get(item_id,
-						data_package.item_id_to_name.get(float(item_id), null))
-					if name_val != null:
-						text = str(name_val)
+					var game_name := _get_player_game(int(part.get("player", 0)))
+					var resolved := data_package.resolve_item(int(text), game_name)
+					if resolved != "":
+						text = resolved
 			"location_id":
 				if data_package:
-					var loc_id := int(text)
-					var name_val = data_package.location_id_to_name.get(loc_id,
-						data_package.location_id_to_name.get(float(loc_id), null))
-					if name_val != null:
-						text = str(name_val)
+					var game_name := _get_player_game(int(part.get("player", 0)))
+					var resolved := data_package.resolve_location(int(text), game_name)
+					if resolved != "":
+						text = resolved
 
 		if color.is_empty():
 			match part_type:
@@ -538,6 +536,12 @@ func _get_player_name(player_slot: int) -> String:
 		if int(p.get("slot", -1)) == player_slot:
 			return str(p.get("alias", p.get("name", "Unknown")))
 	return "Unknown"
+
+func _get_player_game(player_slot: int) -> String:
+	var info = slot_info.get(str(player_slot), slot_info.get(player_slot, null))
+	if info is Dictionary:
+		return str(info.get("game", ""))
+	return ""
 
 func _on_connection_state_changed(new_state: int, _error: int = 0) -> void:
 	if new_state == ConnectState.CONNECTING:

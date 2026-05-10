@@ -152,10 +152,10 @@ func say(text: String):
 	})
 
 func get_data_package(games: Array):
-	_send_command({
-		"cmd": "GetDataPackage",
-		"games": games,
-	})
+	var cmd: Dictionary = {"cmd": "GetDataPackage"}
+	if not games.is_empty():
+		cmd["games"] = games
+	_send_command(cmd)
 
 func send_bounce(data: Dictionary, games: Array = [], slots: Array = [], tags: Array = []):
 	var args = {"cmd": "Bounce", "data": data}

@@ -35,27 +35,67 @@ enum ConnectResult {
 }
 
 class ApDataPackage:
-	var item_name_to_id: Dictionary
-	var location_name_to_id: Dictionary
+	# Per-game ID→name maps, keyed by game name.
+	var items_by_game: Dictionary      # { game_name: { id -> name } }
+	var locations_by_game: Dictionary  # { game_name: { id -> name } }
+	# Own-game flat maps kept for backward-compat (ReceivedItems has no game context).
 	var item_id_to_name: Dictionary
 	var location_id_to_name: Dictionary
-	var version: int
-	var checksum: String
+	var item_name_to_id: Dictionary
+	var location_name_to_id: Dictionary
 
-	func _init(data_package_object: Dictionary):
-		checksum = data_package_object["checksum"]
-		item_name_to_id = data_package_object["item_name_to_id"]
-		location_name_to_id = data_package_object["location_name_to_id"]
+	func _init(data_package_object: Dictionary, own_game: String = ""):
+		items_by_game = {}
+		locations_by_game = {}
+		item_id_to_name = {}
+		location_id_to_name = {}
+		item_name_to_id = {}
+		location_name_to_id = {}
 
-		item_id_to_name = Dictionary()
-		for item_name in item_name_to_id:
-			var item_id = item_name_to_id[item_name]
-			item_id_to_name[item_id] = item_name
+		if data_package_object.has("games"):
+			var games: Dictionary = data_package_object["games"]
+			for game_name in games:
+				_index_game(game_name, games[game_name])
+			if own_game != "" and games.has(own_game):
+				item_id_to_name = items_by_game[own_game]
+				location_id_to_name = locations_by_game[own_game]
+				item_name_to_id = games[own_game].get("item_name_to_id", {})
+				location_name_to_id = games[own_game].get("location_name_to_id", {})
+		else:
+			_index_game(own_game, data_package_object)
+			item_id_to_name = items_by_game.get(own_game, {})
+			location_id_to_name = locations_by_game.get(own_game, {})
+			item_name_to_id = data_package_object.get("item_name_to_id", {})
+			location_name_to_id = data_package_object.get("location_name_to_id", {})
 
-		location_id_to_name = Dictionary()
-		for location_name in location_name_to_id:
-			var location_id = location_name_to_id[location_name]
-			location_id_to_name[location_id] = location_name
+	func _index_game(game_name: String, game_data: Dictionary) -> void:
+		var item_map: Dictionary = {}
+		for name in game_data.get("item_name_to_id", {}):
+			item_map[game_data["item_name_to_id"][name]] = name
+		items_by_game[game_name] = item_map
+
+		var loc_map: Dictionary = {}
+		for name in game_data.get("location_name_to_id", {}):
+			loc_map[game_data["location_name_to_id"][name]] = name
+		locations_by_game[game_name] = loc_map
+
+	func resolve_item(item_id: int, game_name: String) -> String:
+		# Try the specific game first, then fall back to all games.
+		for gname in ([game_name] + items_by_game.keys()):
+			var map: Dictionary = items_by_game.get(gname, {})
+			var val = map.get(item_id, map.get(float(item_id), null))
+			if val != null:
+				return str(val)
+		return ""
+
+	func resolve_location(loc_id: int, game_name: String) -> String:
+		# Try the specific game first, then fall back to all games.
+		for gname in ([game_name] + locations_by_game.keys()):
+			var map: Dictionary = locations_by_game.get(gname, {})
+			var val = map.get(loc_id, map.get(float(loc_id), null))
+			if val != null:
+				return str(val)
+		return ""
 
 var websocket_client
 var config
@@ -125,11 +165,6 @@ func connect_to_multiworld(get_data_package: bool = true) -> int:
 
 	_set_connection_state(ConnectState.CONNECTING)
 
-	# Go through the handshake at below in order:
-	# https://github.com/ArchipelagoMW/Archipelago/blob/main/docs/network%20protocol.md#archipelago-connection-handshake
-
-	# 1. Client establishes WebSocket connection to the Archipelago server.
-	# Skip if we're already connected to a server
 	if not websocket_client.connected_to_server():
 		var server_connect_result = await websocket_client.connect_to_server(server)
 
@@ -140,20 +175,14 @@ func connect_to_multiworld(get_data_package: bool = true) -> int:
 			_set_connection_state(ConnectState.CONNECTED_TO_SERVER)
 			connect_state = ConnectState.CONNECTED_TO_SERVER
 
-		# 2. Server accepts connection and responds with a RoomInfo packet.
 		room_info = await websocket_client.on_room_info
 
-		# 3. Client may send a GetDataPackage packet.
 		if get_data_package:
-			websocket_client.get_data_package([game])
-			ModLoaderLog.info("Sent GetDataPackage, awaiting response...", LOG_NAME)
+			websocket_client.get_data_package([])
+			ModLoaderLog.info("Sent GetDataPackage (all games), awaiting response...", LOG_NAME)
 			var data_package_message = await websocket_client.on_data_package
-			ModLoaderLog.info("Got DataPackage!", LOG_NAME)
-			data_package = ApDataPackage.new(data_package_message["data"]["games"][self.game])
-
-	# 5. Client sends Connect packet in order to authenticate with the server.
-	# 6. Server validates the client's packet and responds with Connected or
-	#    ConnectionRefused.
+			data_package = ApDataPackage.new(data_package_message["data"], self.game)
+			ModLoaderLog.info("Got DataPackage! item_ids=%d location_ids=%d" % [data_package.item_id_to_name.size(), data_package.location_id_to_name.size()], LOG_NAME)
 
 	# Wait for the first response the server sends back
 	if not websocket_client.on_connected.is_connected(_connected_or_connection_refused_received):
