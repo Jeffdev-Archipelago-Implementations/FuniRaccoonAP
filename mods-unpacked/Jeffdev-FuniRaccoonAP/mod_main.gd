@@ -1,7 +1,7 @@
 extends Node
 
 const MOD_NAME = "Jeffdev-FuniRaccoonAP"
-const MOD_VERSION = "1.3.1"
+const MOD_VERSION = "1.3.2"
 const LOG_NAME = MOD_NAME + "/mod_main"
 const CONFIG_PATH = "user://ap_connect.json"
 

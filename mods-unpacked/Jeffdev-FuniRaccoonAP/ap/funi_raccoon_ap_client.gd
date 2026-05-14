@@ -12,10 +12,10 @@ const LOCATION_ID_BASE = 1000
 
 ## Maps numeric goal values from slot_data to goal name strings.
 const GOAL_ID_TO_NAME: Dictionary = {
-	0: "museum",
-	1: "fellowship",
-	2: "lugh",
-	3: "orb",
+	0: "orb",
+	1: "museum",
+	2: "fellowship",
+	3: "lugh",
 }
 
 const PROGRESSIVE_DUMBBELL_AP_ITEM_ID = 400
@@ -666,16 +666,13 @@ func check_goal(expected_goal: String = "") -> void:
 	if connect_state != ConnectState.CONNECTED_TO_MULTIWORLD:
 		ModLoaderLog.info("check_goal: not connected, skipping.", _LOG)
 		return
-	if Globals.save_file.get_meta("ap_goal_complete", false):
-		ModLoaderLog.info("check_goal: already complete, skipping.", _LOG)
-		return
 	var goal_raw = slot_data.get("goal", 0)
 	var goal: String = GOAL_ID_TO_NAME.get(int(goal_raw), str(goal_raw).to_lower())
 	if expected_goal != "" and goal != expected_goal:
 		ModLoaderLog.info("check_goal: expected '%s' but slot goal is '%s', skipping." % [expected_goal, goal], _LOG)
 		return
 	var stored: Array = Globals.save_file.items_stored
-	var dumpster_count: int = Globals.save_file.get_meta("ap_stored_items", []).size()
+	var dumpster_count: int = Globals.save_file.get_meta("stored_items", []).size()
 	ModLoaderLog.info("check_goal: goal='%s' dumpster=%d stored=%s" % [goal, dumpster_count, str(stored)], _LOG)
 	var met := false
 	match goal:
@@ -705,13 +702,7 @@ func check_goal(expected_goal: String = "") -> void:
 				and stored.has(item_tracker.item_id.PRIESTESS)
 				and stored.has(item_tracker.item_id.GREENIE))
 		"lugh":
-			var received_jewels: Array = Globals.save_file.get_meta("ap_received_jewels", [])
-			met = (dumpster_count >= 50
-				and received_jewels.has(601)
-				and received_jewels.has(602)
-				and received_jewels.has(603)
-				and received_jewels.has(604)
-				and stored.has(item_tracker.item_id.KEI_TRUCK))
+			met = (dumpster_count >= 50)
 		_:
 			ModLoaderLog.warning("check_goal: unknown goal '%s', skipping." % goal, _LOG)
 	if met:
