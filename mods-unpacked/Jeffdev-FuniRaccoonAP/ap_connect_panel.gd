@@ -97,7 +97,7 @@ func _update_status(state: int = -1, error: int = 0) -> void:
 		ap_client.ConnectState.CONNECTING:
 			status_label.text = "Connecting..."
 		ap_client.ConnectState.CONNECTED_TO_SERVER:
-			status_label.text = "Connected to server..."
+			status_label.text = "Connected to server, processing datapackages..."
 		ap_client.ConnectState.CONNECTED_TO_MULTIWORLD:
 			status_label.text = "Connected to multiworld!"
 			panel.visible = false

@@ -504,6 +504,10 @@ func _on_received_items(command: Dictionary) -> void:
 				changed = true
 				ModLoaderLog.info("AP granted jewel flag='%s'." % jewel_flag, _LOG)
 				_show_popup(item_name, "Mystical Jewel", items[i], show_popups)
+			var received_jewels: Array = Globals.save_file.get_meta("ap_received_jewels", [])
+			if not received_jewels.has(ap_item_id):
+				received_jewels.append(ap_item_id)
+				Globals.save_file.set_meta("ap_received_jewels", received_jewels)
 		elif ap_item_id == EURO_10_AP_ITEM_ID:
 			Globals.add_euro(10.0)
 			changed = true
@@ -701,14 +705,13 @@ func check_goal(expected_goal: String = "") -> void:
 				and stored.has(item_tracker.item_id.PRIESTESS)
 				and stored.has(item_tracker.item_id.GREENIE))
 		"lugh":
-			var occurred: Array = Globals.save_file.states_occurred
+			var received_jewels: Array = Globals.save_file.get_meta("ap_received_jewels", [])
 			met = (dumpster_count >= 50
-				and occurred.has("jewel_1_eaten")
-				and occurred.has("jewel_2_eaten")
-				and occurred.has("jewel_3_eaten")
-				and occurred.has("jewel_4_eaten")
-				and stored.has(item_tracker.item_id.KEI_TRUCK)
-				and stored.has(item_tracker.item_id.GUN))
+				and received_jewels.has(601)
+				and received_jewels.has(602)
+				and received_jewels.has(603)
+				and received_jewels.has(604)
+				and stored.has(item_tracker.item_id.KEI_TRUCK))
 		_:
 			ModLoaderLog.warning("check_goal: unknown goal '%s', skipping." % goal, _LOG)
 	if met:
