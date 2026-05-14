@@ -672,7 +672,7 @@ func check_goal(expected_goal: String = "") -> void:
 		ModLoaderLog.info("check_goal: expected '%s' but slot goal is '%s', skipping." % [expected_goal, goal], _LOG)
 		return
 	var stored: Array = Globals.save_file.items_stored
-	var dumpster_count: int = Globals.save_file.get_meta("stored_items", []).size()
+	var dumpster_count: int = Globals.save_file.get_meta("items_stored", []).size()
 	ModLoaderLog.info("check_goal: goal='%s' dumpster=%d stored=%s" % [goal, dumpster_count, str(stored)], _LOG)
 	var met := false
 	match goal:
