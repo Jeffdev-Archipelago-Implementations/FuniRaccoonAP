@@ -156,12 +156,16 @@ func _on_node_added(node: Node) -> void:
 			if is_instance_valid(player):
 				var pickup = player.get_node_or_null("pivotCotainer/PickupPivot")
 				if pickup != null:
+					var removed := false
 					for obj in pickup.get_children():
-						obj.queue_free()
-					player.holding = false
-					player.carrying_weight = 0
-					if pickup.menu_updater != null:
-						pickup.menu_updater.remove_object_icons()
+						if obj is InteractData and obj.obj_id == item_tracker.item_id.KEI_TRUCK:
+							obj.queue_free()
+							removed = true
+					if removed:
+						player.holding = false
+						player.carrying_weight = 0
+						if pickup.menu_updater != null:
+							pickup.menu_updater.remove_object_icons()
 
 			node.set_process_input(false)
 			var guard = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/level_access_guard.gd").new()
@@ -199,14 +203,6 @@ func _on_node_added(node: Node) -> void:
 				if is_new:
 					ap_client.item_stored(body.obj_id)
 				node.process_item(body, is_new)
-			)
-			node.player_area_detect.body_exited.connect(func(body: Node3D):
-				if body is PlayerScript:
-					var pickup = body.get_node_or_null("pivotCotainer/PickupPivot")
-					if pickup is pickup_logic:
-						pickup.Delete_Items_In_Hand()
-						if pickup.menu_updater != null:
-							pickup.menu_updater.remove_object_icons()
 			)
 		)
 
