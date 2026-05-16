@@ -51,6 +51,12 @@ func _ready() -> void:
 	
 	get_tree().node_added.connect(_on_node_added)
 
+	var rackheath_info = LevelChanger.all_levels.get(level_changer.LEVEL_ID.DEFAULT)
+	if rackheath_info != null:
+		rackheath_info.level_cluster = 1
+		rackheath_info.level_found = true
+		rackheath_info.level_icon = load("res://Scene/characters/police/moai.tscn")
+
 	LevelChanger.level_Changed.connect(func(level_id: level_changer.LEVEL_ID):
 		match level_id:
 			level_changer.LEVEL_ID.ORB_ENDING:
@@ -68,20 +74,6 @@ func _on_node_added(node: Node) -> void:
 		if node.get_script().resource_path == "res://Scene/Menus/quit_menu.gd":
 			ModLoaderLog.info("Found quit button, connecting pressed signal.", LOG_NAME)
 			node.pressed.connect(_on_quit_pressed)
-
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Menus/pause_menu_logic.gd":
-		node.ready.connect(func():
-			var vbox = node.get_node("CanvasLayer/SpriteContainer/Notebook-sheet/menu_point/Menu_Item_Main/VBoxContainer")
-			var hub_btn = vbox.get_node("Hub")
-			var rackheath_btn = hub_btn.duplicate()
-			rackheath_btn.name = "ReturnToRackheath"
-			rackheath_btn.text = "To Rackheath"
-			rackheath_btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
-			rackheath_btn.set_script(null)
-			rackheath_btn.pressed.connect(_go_to_rackheath)
-			vbox.add_child(rackheath_btn)
-			vbox.move_child(rackheath_btn, hub_btn.get_index() + 1)
-		)
 
 	if node.get_script() != null and node.get_script().resource_path == "res://Scripts/levels/player_level_change.gd":
 		node.ready.connect(func():
@@ -411,9 +403,6 @@ func _on_node_added(node: Node) -> void:
 		node.ready.connect(func():
 			node.interact_area.interacted.disconnect(node.show_atm_interface)
 			node.interact_area.interacted.connect(func(player: PlayerScript):
-				if Globals.save_file.is_the_future:
-					ModLoaderLog.info("ATM blocked: cannot use ATM in dumpster level.", LOG_NAME)
-					return
 				var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
 				var original: Array = Globals.save_file.items_stored.duplicate()
 				Globals.save_file.items_stored.clear()
@@ -468,16 +457,6 @@ func _on_node_added(node: Node) -> void:
 				node.picked_up(player)
 			)
 		)
-
-
-func _go_to_rackheath() -> void:
-	Globals.player_inst.pickup_pivot.Delete_Items_In_Hand()
-	LevelChanger.CHANGE_LEVEL(
-		LevelChanger.get_level_resource(level_changer.LEVEL_ID.DEFAULT).level_container,
-		Globals.player_inst,
-		"START_SPAWN"
-	)
-	MenuController.hide_pause()
 
 func _on_quit_pressed() -> void:
 	ModLoaderLog.info("Quit pressed, disconnecting from AP.", LOG_NAME)
