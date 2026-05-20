@@ -547,9 +547,9 @@ func _get_player_game(player_slot: int) -> String:
 	return ""
 
 const ACT_CLUSTER_NAMES: Dictionary = {
-	1: "NORWICH_REGION",        # act1
-	2: "BLIMBO_CITY_REGION",    # act2
-	5: "BLIMBO_VILLAGE_REGION", # act3
+	1: "ACT_1_CLUSTER",     # act1
+	2: "ACT_2_CLUSTER",    	# act2
+	5: "ACT_3_CLUSTER", 	# act3
 }
 
 func update_map_location(level_id: int) -> void:
