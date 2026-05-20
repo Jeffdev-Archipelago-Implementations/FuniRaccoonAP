@@ -1,6 +1,7 @@
 extends Node
 
 var _orb: Node
+var ap_client: Node
 
 # Minimum AP items received (ap_received_item_index) required per cluster.
 const CLUSTER_REQUIREMENTS: Dictionary = {
@@ -65,6 +66,8 @@ func _input(event: InputEvent) -> void:
 			)
 			LevelChanger.LOAD_FROM_LEVEL_SELECT_WITH_ID(level_changer.LEVEL_ID.MAIN_MENU)
 		else:
+			if is_instance_valid(ap_client):
+				ap_client.update_map_location(level_id)
 			LevelChanger.LOAD_FROM_LEVEL_SELECT_WITH_ID(level_id)
 
 		MenuController.menus_transiting = false

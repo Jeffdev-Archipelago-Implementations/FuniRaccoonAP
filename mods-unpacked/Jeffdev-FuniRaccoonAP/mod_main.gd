@@ -1,7 +1,7 @@
 extends Node
 
 const MOD_NAME = "Jeffdev-FuniRaccoonAP"
-const MOD_VERSION = "1.3.2"
+const MOD_VERSION = "1.4.0"
 const LOG_NAME = MOD_NAME + "/mod_main"
 const CONFIG_PATH = "user://ap_connect.json"
 
@@ -58,6 +58,7 @@ func _ready() -> void:
 		rackheath_info.level_icon = load("res://Scene/characters/police/moai.tscn")
 
 	LevelChanger.level_Changed.connect(func(level_id: level_changer.LEVEL_ID):
+		ap_client.update_map_location(level_id)
 		match level_id:
 			level_changer.LEVEL_ID.ORB_ENDING:
 				ap_client.check_goal("orb")
@@ -160,8 +161,10 @@ func _on_node_added(node: Node) -> void:
 							pickup.menu_updater.remove_object_icons()
 
 			node.set_process_input(false)
+			ap_client.update_map_location_for_cluster(node.level_cluster_id)
 			var guard = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/level_access_guard.gd").new()
 			guard._orb = node
+			guard.ap_client = ap_client
 			node.add_child(guard)
 		)
 
