@@ -2,8 +2,9 @@ extends Node
 
 var _orb: Node
 var ap_client: Node
+var _last_shown_level_id: int = -1
 
-# Minimum AP items received (ap_received_item_index) required per cluster.
+# Minimum dumpsterable AP items received (items_stored.size()) required per cluster.
 const CLUSTER_REQUIREMENTS: Dictionary = {
 	level_info.level_cluster_id.act2: 25,
 	level_info.level_cluster_id.act3: 35,
@@ -15,8 +16,6 @@ const LEVEL_REQUIREMENTS: Dictionary = {
 	level_changer.LEVEL_ID.MUSEUM:             15,
 	level_changer.LEVEL_ID.BLIMBO_CITY:        35,
 	level_changer.LEVEL_ID.RBMK:              50,
-	level_changer.LEVEL_ID.GULLY:             100,
-	level_changer.LEVEL_ID.SALMON_OF_KNOWLEDGE: 100,
 }
 
 static func item_requirement_met(level_id: level_changer.LEVEL_ID) -> bool:
@@ -38,6 +37,23 @@ static func get_required_for_level(level_id: level_changer.LEVEL_ID) -> int:
 func _get_required(level_id: level_changer.LEVEL_ID) -> int:
 	return get_required_for_level(level_id)
 
+func _process(_delta: float) -> void:
+	if not is_instance_valid(_orb):
+		return
+	var icon = _orb.current_selected_world
+	if icon == null or not is_instance_valid(icon):
+		return
+	var current_id: int = int(icon.level_id)
+	if current_id == _last_shown_level_id:
+		return
+	_last_shown_level_id = current_id
+	var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
+	var count: int = 0
+	for item_id in icon.items:
+		if ap_stored.has(item_id):
+			count += 1
+	_orb.items_got_text.text = "[shake]Items Got: " + str(count) + "/" + str(icon.items.size())
+
 func _input(event: InputEvent) -> void:
 	if not is_instance_valid(_orb):
 		return
@@ -51,7 +67,7 @@ func _input(event: InputEvent) -> void:
 
 		var level_id: level_changer.LEVEL_ID = _orb.current_selected_world.level_id
 		var required: int = _get_required(level_id)
-		var have: int = Globals.save_file.get_meta("ap_received_item_index", 0)
+		var have: int = Globals.save_file.items_stored.size()
 
 		_orb.transition_to_level_started = true
 		_orb.animation_player_camera.play("camera_tween")

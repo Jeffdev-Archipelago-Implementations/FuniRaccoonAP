@@ -1,7 +1,7 @@
 extends Node
 
 const MOD_NAME = "Jeffdev-FuniRaccoonAP"
-const MOD_VERSION = "1.4.0"
+const MOD_VERSION = "1.5.0"
 const LOG_NAME = MOD_NAME + "/mod_main"
 const CONFIG_PATH = "user://ap_connect.json"
 
@@ -84,7 +84,7 @@ func _on_node_added(node: Node) -> void:
 					var level_id = node.level_id
 					var LevelAccessGuard = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/level_access_guard.gd")
 					var required: int = LevelAccessGuard.get_required_for_level(level_id)
-					var have: int = Globals.save_file.get_meta("ap_received_item_index", 0)
+					var have: int = Globals.save_file.items_stored.size()
 					if have < required or not LevelAccessGuard.item_requirement_met(level_id):
 						ModLoaderLog.info(
 							"Transition to %s blocked: need %d items, have %d." % [
@@ -191,6 +191,11 @@ func _on_node_added(node: Node) -> void:
 				if body.obj_id == item_tracker.item_id.KEI_TRUCK:
 					return
 				if LevelChanger.current_level.level_id == level_changer.LEVEL_ID.MAIN_MENU:
+					return
+				var weight_blocking: bool = ap_client.slot_data.get("options", {}).get("dumpster_weight_blocking", false)
+				if weight_blocking and float(body.weight) > float(Globals.save_file.strength):
+					ModLoaderLog.info("Dumpster rejected %s: weight %s > strength %s" % [body.obj_id, body.weight, Globals.save_file.strength], LOG_NAME)
+					node.process_item(body, false)
 					return
 				body.item_in_dumpster.emit()
 				var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
@@ -334,10 +339,15 @@ func _on_node_added(node: Node) -> void:
 		if ap_received and not player_collected:
 			Globals.save_file.unlocked_hats.erase(hat_id)
 		node.ready.connect(func():
+			if player_collected:
+				if is_instance_valid(node.item_hat_data):
+					node.item_hat_data.queue_free()
+				return
 			if ap_received and not player_collected:
 				if not Globals.save_file.unlocked_hats.has(hat_id):
 					Globals.save_file.unlocked_hats.append(hat_id)
 			if is_instance_valid(node.item_hat_data):
+				node.item_hat_data.eaten_signal.disconnect(node.found_hat)
 				node.item_hat_data.eaten_signal.connect(func(_player):
 					ap_client.hat_collected(hat_id)
 				)

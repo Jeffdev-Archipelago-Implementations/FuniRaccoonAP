@@ -2,6 +2,7 @@ extends Node
 
 var _orb: Node
 var ap_client: Node
+var _last_shown_level_id: int = -1
 
 # Minimum AP items received (ap_received_item_index) required per cluster.
 const CLUSTER_REQUIREMENTS: Dictionary = {
@@ -37,6 +38,23 @@ static func get_required_for_level(level_id: level_changer.LEVEL_ID) -> int:
 
 func _get_required(level_id: level_changer.LEVEL_ID) -> int:
 	return get_required_for_level(level_id)
+
+func _process(_delta: float) -> void:
+	if not is_instance_valid(_orb):
+		return
+	var icon = _orb.current_selected_world
+	if icon == null or not is_instance_valid(icon):
+		return
+	var current_id: int = int(icon.level_id)
+	if current_id == _last_shown_level_id:
+		return
+	_last_shown_level_id = current_id
+	var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
+	var count: int = 0
+	for item_id in icon.items:
+		if ap_stored.has(item_id):
+			count += 1
+	_orb.items_got_text.text = "[shake]Items Got: " + str(count) + "/" + str(icon.items.size())
 
 func _input(event: InputEvent) -> void:
 	if not is_instance_valid(_orb):
