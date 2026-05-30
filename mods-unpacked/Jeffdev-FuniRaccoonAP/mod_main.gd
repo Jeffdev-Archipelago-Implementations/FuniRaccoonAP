@@ -1,7 +1,7 @@
 extends Node
 
 const MOD_NAME = "Jeffdev-FuniRaccoonAP"
-const MOD_VERSION = "1.5.0"
+const MOD_VERSION = "1.5.1"
 const LOG_NAME = MOD_NAME + "/mod_main"
 const CONFIG_PATH = "user://ap_connect.json"
 
@@ -192,17 +192,55 @@ func _on_node_added(node: Node) -> void:
 					return
 				if LevelChanger.current_level.level_id == level_changer.LEVEL_ID.MAIN_MENU:
 					return
-				var weight_blocking: bool = ap_client.slot_data.get("options", {}).get("dumpster_weight_blocking", false)
-				if weight_blocking and float(body.weight) > float(Globals.save_file.strength):
-					ModLoaderLog.info("Dumpster rejected %s: weight %s > strength %s" % [body.obj_id, body.weight, Globals.save_file.strength], LOG_NAME)
-					node.process_item(body, false)
-					return
-				body.item_in_dumpster.emit()
 				var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
 				var is_new: bool = not ap_stored.has(body.obj_id)
-				if is_new:
-					ap_client.item_stored(body.obj_id)
-				node.process_item(body, is_new)
+				var weight_blocking: bool = ap_client.slot_data.get("options", {}).get("dumpster_weight_blocking", false)
+				if not is_new:
+					body.item_in_dumpster.emit()
+					node.process_item(body, false)
+					return
+				if weight_blocking and float(body.weight) > float(Globals.save_file.strength):
+					ModLoaderLog.info("Dumpster rejected %s: weight %s > strength %s" % [body.obj_id, body.weight, Globals.save_file.strength], LOG_NAME)
+					body.freeze = true
+					body.set_collision_layer_value(3, false)
+					body.set_collision_mask_value(1, false)
+					body.set_collision_mask_value(3, false)
+					body.set_collision_mask_value(4, false)
+					body.set_collision_mask_value(5, false)
+					var t1 = node.create_tween()
+					t1.tween_property(body, "global_position", node.start_point.global_position, 0.1)
+					await t1.finished
+					if not is_instance_valid(body) or not is_instance_valid(node):
+						return
+					var t2 = node.create_tween()
+					t2.tween_property(body, "global_position", node.end_point.global_position, 0.1)
+					await t2.finished
+					if not is_instance_valid(body) or not is_instance_valid(node):
+						return
+					node.animation_player.play("stuff_added")
+					node.play_random_sounds()
+					body.hide()
+					await node.animation_player.animation_finished
+					if not is_instance_valid(body) or not is_instance_valid(node):
+						return
+					body.freeze = false
+					body.show()
+					body.global_position = node.end_point.global_position
+					body.apply_central_impulse((node.get_transform().basis.z * -node.dupes_forward_force) + node.dupes_directions)
+					EffectsSpawner.spawn_explosion(node.global_position + Vector3.UP * 4)
+					node.TEXT_SPAWN_DUPE(Vector3(0, 6, 0), "TOO HEAVY!")
+					await node.get_tree().create_timer(1).timeout
+					if not is_instance_valid(body) or not is_instance_valid(node):
+						return
+					body.set_collision_layer_value(3, true)
+					body.set_collision_mask_value(1, true)
+					body.set_collision_mask_value(3, true)
+					body.set_collision_mask_value(4, true)
+					body.set_collision_mask_value(5, true)
+					return
+				body.item_in_dumpster.emit()
+				ap_client.item_stored(body.obj_id)
+				node.process_item(body, true)
 			)
 		)
 
