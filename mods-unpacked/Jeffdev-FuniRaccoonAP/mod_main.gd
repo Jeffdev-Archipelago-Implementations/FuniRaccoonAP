@@ -62,8 +62,6 @@ func _ready() -> void:
 		match level_id:
 			level_changer.LEVEL_ID.ORB_ENDING:
 				ap_client.check_goal("orb")
-			level_changer.LEVEL_ID.ENDING_ALL_ITEMS:
-				ap_client.check_goal("museum")
 			level_changer.LEVEL_ID.BEENIE_BRANCH:
 				ap_client.check_goal("fellowship")
 			level_changer.LEVEL_ID.HYPERCUBE_TREE_ENDING:
@@ -127,6 +125,13 @@ func _on_node_added(node: Node) -> void:
 				elif ap_stored.has(obj_id) and not Globals.save_file.items_stored.has(obj_id):
 					child.get_node("spawn").add_child(child.item)
 					child.item.position.y = child.item.height / 2
+		)
+
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/museum/ending_controller.gd":
+		node.ready.connect(func():
+			node.dialogue_interact.dialogue_closed.connect(func():
+				ap_client.check_goal("museum")
+			)
 		)
 
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/keiTruck/stunt_tracker.gd":
