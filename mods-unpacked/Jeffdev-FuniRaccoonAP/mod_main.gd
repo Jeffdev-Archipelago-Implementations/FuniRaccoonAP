@@ -1,7 +1,7 @@
 extends Node
 
 const MOD_NAME = "Jeffdev-FuniRaccoonAP"
-const MOD_VERSION = "1.5.1"
+const MOD_VERSION = "1.5.2"
 const LOG_NAME = MOD_NAME + "/mod_main"
 const CONFIG_PATH = "user://ap_connect.json"
 
@@ -43,6 +43,8 @@ func _ready() -> void:
 	add_child(ap_client)
 
 	ModLoaderLog.success("AP client ready v%s" % MOD_VERSION, LOG_NAME)
+	var ApChatPopupScript = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
+	ApChatPopupScript.set_ap_client(ap_client)
 		
 	var ApConnectPanelScript = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_connect_panel.tscn")
 	var connect_panel = ApConnectPanelScript.instantiate()

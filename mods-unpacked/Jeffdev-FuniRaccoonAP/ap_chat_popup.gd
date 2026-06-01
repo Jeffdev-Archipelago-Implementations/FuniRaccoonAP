@@ -5,14 +5,19 @@
 extends CanvasLayer
 
 const MAX_MESSAGES = 4
-const MESSAGE_DURATION = 5.0
+const MESSAGE_DURATION = 7.5
 const TOGGLE_KEY = KEY_F6
+const GOAL_KEY = KEY_F2
 
 static var _manager: CanvasLayer = null
 static var _vbox: VBoxContainer = null
 static var _messages: Array = []  # Active RichTextLabel nodes
 static var _chat_visible: bool = true
 static var _hiding: bool = false
+static var _ap_client = null
+
+static func set_ap_client(client) -> void:
+	_ap_client = client
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -31,6 +36,30 @@ func _input(event: InputEvent) -> void:
 					if not _chat_visible and is_instance_valid(_vbox):
 						_vbox.visible = false
 				)
+		elif event.keycode == GOAL_KEY:
+			if not is_instance_valid(_ap_client):
+				return
+			if Globals.save_file.get_meta("ap_goal_complete", false):
+				show_message("[color=#00FF7F]GOAL COMPLETE![/color]", get_tree().get_root())
+				return
+			var goal_raw = _ap_client.slot_data.get("goal", -1)
+			var goal: String = _ap_client.GOAL_ID_TO_NAME.get(int(goal_raw), "unknown")
+			var stored: Array = Globals.save_file.items_stored
+			var count: int = stored.size()
+			var msg: String
+			match goal:
+				"orb":
+					msg = "[color=#FAFAD2]Goal: Orb[/color] (%d/50 items)" % count
+				"museum":
+					msg = "[color=#FAFAD2]Goal: Museum[/color] (%d/100 items)" % count
+				"fellowship":
+					msg = "[color=#FAFAD2]Goal: Fellowship[/color] (%d/25 items)" % count
+				"lugh":
+					msg = "[color=#FAFAD2]Goal: Lugh[/color] (%d/50 items)" % count
+				_:
+					msg = "[color=#FAFAD2]Goal: %s[/color]" % goal
+			show_message(msg, get_tree().get_root())
+
 
 static func show_message(bbcode_text: String, root: Node) -> void:
 	if _hiding:

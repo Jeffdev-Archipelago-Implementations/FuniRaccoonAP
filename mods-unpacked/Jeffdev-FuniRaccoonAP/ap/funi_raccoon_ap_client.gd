@@ -573,19 +573,31 @@ func _on_connection_state_changed(new_state: int, _error: int = 0) -> void:
 		if LevelChanger.current_level != null:
 			update_map_location(LevelChanger.current_level.level_id)
 		sync_stored_items()
-		if Globals.save_file.is_the_future:
-			LevelChanger.LOAD_FROM_LEVEL_WITH_SHORT_ID(
-				level_changer.LEVEL_ID.CANYON,
-				Globals.player_inst,
-				"THE_DUMPSTER"
-			)
-		else:
-			LevelChanger.LOAD_FROM_LEVEL_WITH_SHORT_ID(
-				level_changer.LEVEL_ID.MAIN_MENU,
-				Globals.player_inst,
-				"START_SPAWN"
-			)
+		var rackheath = LevelChanger.all_levels.get(level_changer.LEVEL_ID.DEFAULT)
+		if rackheath != null:
+			rackheath.level_found = true
+		if not Globals.save_file.found_levels.has(level_changer.LEVEL_ID.DEFAULT):
+			Globals.save_file.found_levels.append(level_changer.LEVEL_ID.DEFAULT)
+			Globals.save_game()
+		var on_rackheath = LevelChanger.current_level != null and LevelChanger.current_level.level_id == level_changer.LEVEL_ID.DEFAULT
+		if not on_rackheath:
+			if Globals.save_file.is_the_future:
+				LevelChanger.LOAD_FROM_LEVEL_WITH_SHORT_ID(
+					level_changer.LEVEL_ID.CANYON,
+					Globals.player_inst,
+					"THE_DUMPSTER"
+				)
+			else:
+				LevelChanger.LOAD_FROM_LEVEL_WITH_SHORT_ID(
+					level_changer.LEVEL_ID.MAIN_MENU,
+					Globals.player_inst,
+					"START_SPAWN"
+				)
+		var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
+		popup_script.show_message("Controls: [color=#FAFAD2]F2[/color]: Display Goal | [color=#FAFAD2]F6[/color]: Toggle AP Message Display", get_tree().get_root())
 	elif new_state == ConnectState.DISCONNECTED:
+		var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
+		popup_script.show_message("[color=#EE0000]Disconnected from Archipelago[/color]", get_tree().get_root())
 		Globals.QUIT_TO_MEUN()
 
 func sync_stored_items() -> void:
