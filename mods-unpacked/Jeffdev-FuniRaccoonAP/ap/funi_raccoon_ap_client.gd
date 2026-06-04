@@ -594,7 +594,7 @@ func _on_connection_state_changed(new_state: int, _error: int = 0) -> void:
 					"START_SPAWN"
 				)
 		var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
-		popup_script.show_message("Controls: [color=#FAFAD2]F2[/color]: Display Goal | [color=#FAFAD2]F6[/color]: Toggle AP Message Display", get_tree().get_root())
+		popup_script.show_message("Controls: [color=#FAFAD2]F2[/color]: Goal | [color=#FAFAD2]F3[/color]: Toggle Popups | [color=#FAFAD2]F6[/color]: Toggle Messages", get_tree().get_root())
 	elif new_state == ConnectState.DISCONNECTED:
 		var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
 		popup_script.show_message("[color=#EE0000]Disconnected from Archipelago[/color]", get_tree().get_root())
@@ -731,9 +731,13 @@ func check_goal(expected_goal: String = "") -> void:
 				and stored.has(item_tracker.item_id.COOLING_ROD_FRIDGE_KING)
 				and stored.has(item_tracker.item_id.KEI_TRUCK))
 		"fellowship":
-			met = (dumpster_count >= 25
+			met = (dumpster_count >= 50
 				and stored.has(item_tracker.item_id.PRIESTESS)
-				and stored.has(item_tracker.item_id.GREENIE))
+				and stored.has(item_tracker.item_id.GREENIE)
+				and stored.has(item_tracker.item_id.COOLING_ROD)
+				and stored.has(item_tracker.item_id.COOLING_ROD_PLIMBO)
+				and stored.has(item_tracker.item_id.COOLING_ROD_FRIDGE_KING)
+				and stored.has(item_tracker.item_id.KEI_TRUCK))
 		"lugh":
 			met = (dumpster_count >= 50)
 		_:

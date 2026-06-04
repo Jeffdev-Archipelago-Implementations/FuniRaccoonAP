@@ -5,8 +5,11 @@ var _sender_name: String = ""
 
 static var _queue: Array = []
 static var _showing: bool = false
+static var _enabled: bool = true
 
 static func show_popup(item_name: String, sender_name: String, root: Node) -> void:
+	if not _enabled:
+		return
 	_queue.append({"item_name": item_name, "sender_name": sender_name, "root": root})
 	if not _showing:
 		_show_next()

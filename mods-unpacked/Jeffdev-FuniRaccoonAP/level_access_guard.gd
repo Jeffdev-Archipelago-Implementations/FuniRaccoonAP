@@ -73,7 +73,8 @@ func _input(event: InputEvent) -> void:
 		_orb.animation_player_camera.play("camera_tween")
 		await _orb.animation_player_camera.animation_finished
 
-		if have < required or not item_requirement_met(level_id):
+		var connected: bool = is_instance_valid(ap_client) and ap_client.connect_state == ap_client.ConnectState.CONNECTED_TO_MULTIWORLD
+		if not connected or have < required or not item_requirement_met(level_id):
 			ModLoaderLog.info(
 				"Level %s blocked: need %d items, have %d. Redirecting to dumpster." % [
 					level_changer.LEVEL_ID.keys()[level_id], required, have

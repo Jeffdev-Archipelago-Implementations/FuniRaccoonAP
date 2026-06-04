@@ -1,12 +1,13 @@
 extends Node
 
 const MOD_NAME = "Jeffdev-FuniRaccoonAP"
-const MOD_VERSION = "1.5.2"
+const MOD_VERSION = "1.5.3"
 const LOG_NAME = MOD_NAME + "/mod_main"
 const CONFIG_PATH = "user://ap_connect.json"
 
 var ap_websocket_connection
 var ap_client
+var connect_panel
 
 func _init() -> void:
 	ModLoaderLog.info("Init", LOG_NAME)
@@ -47,11 +48,12 @@ func _ready() -> void:
 	ApChatPopupScript.set_ap_client(ap_client)
 		
 	var ApConnectPanelScript = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_connect_panel.tscn")
-	var connect_panel = ApConnectPanelScript.instantiate()
+	connect_panel = ApConnectPanelScript.instantiate()
 	connect_panel.ap_client = ap_client
 	add_child(connect_panel)
 	
 	get_tree().node_added.connect(_on_node_added)
+	call_deferred("_scan_existing_save_select")
 
 	var rackheath_info = LevelChanger.all_levels.get(level_changer.LEVEL_ID.DEFAULT)
 	if rackheath_info != null:
@@ -76,6 +78,12 @@ func _on_node_added(node: Node) -> void:
 			ModLoaderLog.info("Found quit button, connecting pressed signal.", LOG_NAME)
 			node.pressed.connect(_on_quit_pressed)
 
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Menus/setup/load_game.gd":
+		node.ready.connect(func():
+			if ap_client.connect_state != ap_client.ConnectState.CONNECTED_TO_MULTIWORLD:
+				connect_panel.show_overlay()
+		, CONNECT_ONE_SHOT)
+
 	if node.get_script() != null and node.get_script().resource_path == "res://Scripts/levels/player_level_change.gd":
 		node.ready.connect(func():
 			node.body_entered.disconnect(node._on_body_entered)
@@ -85,10 +93,12 @@ func _on_node_added(node: Node) -> void:
 					var LevelAccessGuard = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/level_access_guard.gd")
 					var required: int = LevelAccessGuard.get_required_for_level(level_id)
 					var have: int = Globals.save_file.items_stored.size()
-					if have < required or not LevelAccessGuard.item_requirement_met(level_id):
+					if ap_client.connect_state != ap_client.ConnectState.CONNECTED_TO_MULTIWORLD \
+							or have < required or not LevelAccessGuard.item_requirement_met(level_id):
 						ModLoaderLog.info(
-							"Transition to %s blocked: need %d items, have %d." % [
-								level_changer.LEVEL_ID.keys()[level_id], required, have
+							"Transition to %s blocked: need %d items, have %d, connected=%s." % [
+								level_changer.LEVEL_ID.keys()[level_id], required, have,
+								str(ap_client.connect_state == ap_client.ConnectState.CONNECTED_TO_MULTIWORLD)
 							],
 							LOG_NAME
 						)
@@ -515,6 +525,82 @@ func _on_node_added(node: Node) -> void:
 				node.picked_up(player)
 			)
 		)
+
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/MainMenu/save_file_select_logic.gd":
+		node.ready.connect(func():
+			_setup_save_file_select(node)
+		, CONNECT_ONE_SHOT)
+
+func _scan_existing_save_select() -> void:
+	for n in get_tree().root.find_children("*", "", true, false):
+		if n.get_script() != null and n.get_script().resource_path == "res://Scene/MainMenu/save_file_select_logic.gd":
+			_setup_save_file_select(n)
+
+func _setup_save_file_select(node: Node) -> void:
+	if is_instance_valid(node.get_node_or_null("APInfoLabel")):
+		return
+	var ap_label := RichTextLabel.new()
+	ap_label.name = "APInfoLabel"
+	ap_label.bbcode_enabled = true
+	ap_label.fit_content = true
+	ap_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ap_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ap_label.add_theme_color_override("default_color", Color(1, 1, 0, 1))
+	ap_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 1))
+	ap_label.add_theme_constant_override("shadow_offset_x", 3)
+	ap_label.add_theme_constant_override("shadow_offset_y", 3)
+	ap_label.add_theme_font_override("normal_font", load("res://Fonts/IBM_EGA_8x8.ttf"))
+	ap_label.add_theme_font_size_override("normal_font_size", 18)
+	var container := node.get_node_or_null("Centerer/Container")
+	if container != null:
+		ap_label.set_position(Vector2(0, 436))
+		ap_label.set_size(Vector2(620, 40))
+		container.add_child(ap_label)
+	else:
+		node.add_child(ap_label)
+	for icon in node.find_children("*", "", true, false):
+		if icon.get_script() == null:
+			continue
+		if icon.get_script().resource_path != "res://Scene/MainMenu/save_file_icon.gd":
+			continue
+		if not icon.has_signal("raccoon_button_focus"):
+			continue
+		icon.raccoon_button_focus.connect(func(icon_node):
+			var raccoon_id: String = str(icon_node.get("id") if icon_node.get("id") != null else "")
+			if not raccoon_id.is_empty():
+				_show_ap_info(ap_label, raccoon_id)
+		)
+
+func _show_ap_info(ap_label: RichTextLabel, raccoon_name: String) -> void:
+	var save_path := "user://raccoon_saves/%s_game_save.tres" % raccoon_name
+	if not FileAccess.file_exists(save_path):
+		save_path = "user://raccoon_saves/%s_game_saves.res" % raccoon_name
+	var logo: Texture2D = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/images/ap_logo_80.png")
+	ap_label.clear()
+	if not FileAccess.file_exists(save_path):
+		if logo:
+			ap_label.add_image(logo, 24, 24, Color(0.5, 0.5, 0.5, 1))
+			ap_label.add_text(" ")
+		ap_label.push_color(Color(0.6, 0.6, 0.6, 1))
+		ap_label.add_text("No Archipelago Data")
+		ap_label.pop()
+		return
+	var save_game = ResourceLoader.load(save_path, "", ResourceLoader.CACHE_MODE_IGNORE)
+	if save_game == null or not save_game.has_meta("ap_slot_name"):
+		if logo:
+			ap_label.add_image(logo, 24, 24, Color(0.5, 0.5, 0.5, 1))
+			ap_label.add_text(" ")
+		ap_label.push_color(Color(0.6, 0.6, 0.6, 1))
+		ap_label.add_text("No Archipelago Data")
+		ap_label.pop()
+		return
+	var slot_name: String = save_game.get_meta("ap_slot_name")
+	if logo:
+		ap_label.add_image(logo, 24, 24)
+		ap_label.add_text(" ")
+	ap_label.push_color(Color(1, 1, 0, 1))
+	ap_label.add_text("%s" % slot_name)
+	ap_label.pop()
 
 func _on_quit_pressed() -> void:
 	ModLoaderLog.info("Quit pressed, disconnecting from AP.", LOG_NAME)

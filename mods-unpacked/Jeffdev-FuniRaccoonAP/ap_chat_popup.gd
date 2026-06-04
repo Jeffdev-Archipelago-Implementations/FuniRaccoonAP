@@ -8,6 +8,7 @@ const MAX_MESSAGES = 4
 const MESSAGE_DURATION = 7.5
 const TOGGLE_KEY = KEY_F6
 const GOAL_KEY = KEY_F2
+const POPUP_TOGGLE_KEY = KEY_F3
 
 static var _manager: CanvasLayer = null
 static var _vbox: VBoxContainer = null
@@ -36,9 +37,15 @@ func _input(event: InputEvent) -> void:
 					if not _chat_visible and is_instance_valid(_vbox):
 						_vbox.visible = false
 				)
+		elif event.keycode == POPUP_TOGGLE_KEY:
+			var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_item_popup.gd")
+			popup_script._enabled = not popup_script._enabled
+			var state := "Enabled" if popup_script._enabled else "Disabled"
+			show_message("[color=#FAFAD2]Item Popups: %s[/color]" % state, get_tree().get_root())
 		elif event.keycode == GOAL_KEY:
 			if not is_instance_valid(_ap_client):
 				return
+			_clear_messages()
 			if Globals.save_file.get_meta("ap_goal_complete", false):
 				show_message("[color=#00FF7F]GOAL COMPLETE![/color]", get_tree().get_root())
 				return
@@ -46,20 +53,53 @@ func _input(event: InputEvent) -> void:
 			var goal: String = _ap_client.GOAL_ID_TO_NAME.get(int(goal_raw), "unknown")
 			var stored: Array = Globals.save_file.items_stored
 			var count: int = stored.size()
+			var chk := func(label: String, item_id) -> String:
+				var has_it: bool = stored.has(item_id)
+				return "[color=%s]%s %s[/color]" % ["#00FF7F" if has_it else "#EE0000", "✓" if has_it else "✗", label]
 			var msg: String
 			match goal:
 				"orb":
-					msg = "[color=#FAFAD2]Goal: Orb[/color] (%d/50 items)" % count
+					msg = "[color=#FAFAD2]Goal: Orb[/color] - %d/50 items\n" % count
+					msg += chk.call("Orb", item_tracker.item_id.ORB) + "\n"
+					msg += chk.call("Cooling Rod", item_tracker.item_id.COOLING_ROD) + "\n"
+					msg += chk.call("Cooling Rod (Plimbo)", item_tracker.item_id.COOLING_ROD_PLIMBO) + "\n"
+					msg += chk.call("Cooling Rod (Fridge King)", item_tracker.item_id.COOLING_ROD_FRIDGE_KING) + "\n"
+					msg += chk.call("Kei Truck", item_tracker.item_id.KEI_TRUCK)
 				"museum":
-					msg = "[color=#FAFAD2]Goal: Museum[/color] (%d/100 items)" % count
+					msg = "[color=#FAFAD2]Goal: Museum[/color] - %d/100 items\n" % count
+					msg += chk.call("Waffle", item_tracker.item_id.WAFFLE) + "\n"
+					msg += chk.call("Cooling Rod", item_tracker.item_id.COOLING_ROD) + "\n"
+					msg += chk.call("Cooling Rod (Plimbo)", item_tracker.item_id.COOLING_ROD_PLIMBO) + "\n"
+					msg += chk.call("Cooling Rod (Fridge King)", item_tracker.item_id.COOLING_ROD_FRIDGE_KING) + "\n"
+					msg += chk.call("Kei Truck", item_tracker.item_id.KEI_TRUCK)
 				"fellowship":
-					msg = "[color=#FAFAD2]Goal: Fellowship[/color] (%d/25 items)" % count
+					msg = "[color=#FAFAD2]Goal: Fellowship[/color] - %d/50 items\n" % count
+					msg += chk.call("Priestess", item_tracker.item_id.PRIESTESS) + "\n"
+					msg += chk.call("Greenie", item_tracker.item_id.GREENIE) + "\n"
+					msg += chk.call("Cooling Rod", item_tracker.item_id.COOLING_ROD) + "\n"
+					msg += chk.call("Cooling Rod (Plimbo)", item_tracker.item_id.COOLING_ROD_PLIMBO) + "\n"
+					msg += chk.call("Cooling Rod (Fridge King)", item_tracker.item_id.COOLING_ROD_FRIDGE_KING)
 				"lugh":
-					msg = "[color=#FAFAD2]Goal: Lugh[/color] (%d/50 items)" % count
+					var states: Array = Globals.save_file.states_occurred
+					var chk_jewel := func(label: String, flag: String) -> String:
+						var has_it: bool = states.has(flag)
+						return "[color=%s]%s %s[/color]" % ["#00FF7F" if has_it else "#EE0000", "✓" if has_it else "✗", label]
+					msg = "[color=#FAFAD2]Goal: Lugh[/color] - %d/50 items\n" % count
+					msg += chk.call("Kei Truck", item_tracker.item_id.KEI_TRUCK) + "\n"
+					msg += chk_jewel.call("Mystical Gem (Green)", "jewel_1_eaten") + "\n"
+					msg += chk_jewel.call("Mystical Gem (Blue)", "jewel_2_eaten") + "\n"
+					msg += chk_jewel.call("Mystical Gem (Purple)", "jewel_3_eaten") + "\n"
+					msg += chk_jewel.call("Mystical Gem (Red)", "jewel_4_eaten")
 				_:
 					msg = "[color=#FAFAD2]Goal: %s[/color]" % goal
 			show_message(msg, get_tree().get_root())
 
+
+static func _clear_messages() -> void:
+	for msg in _messages:
+		if is_instance_valid(msg):
+			msg.queue_free()
+	_messages.clear()
 
 static func show_message(bbcode_text: String, root: Node) -> void:
 	if _hiding:
@@ -88,7 +128,7 @@ static func _create_manager(root: Node) -> void:
 	_vbox.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	_vbox.offset_left = 20.0
 	_vbox.offset_right = 395.0  # 375px wide
-	_vbox.offset_top = -295.0   # tall enough for 4 rows
+	_vbox.offset_top = -295.0
 	_vbox.offset_bottom = -20.0
 
 	_manager.add_child(_vbox)

@@ -5,12 +5,15 @@ const CONFIG_PATH = "user://ap_connect.json"
 
 var ap_client
 var _visible := false
+var _force_open := false
+var _going_to_menu := false
 
 @onready var panel := $Panel
 @onready var server_field := $Panel/VBoxContainer/ServerField
 @onready var player_field := $Panel/VBoxContainer/PlayerField
 @onready var password_field := $Panel/VBoxContainer/PasswordField
 @onready var connect_button := $Panel/VBoxContainer/ConnectButton
+@onready var main_menu_button := $Panel/VBoxContainer/MainMenuButton
 @onready var status_label := $Panel/VBoxContainer/StatusLabel
 
 func _ready() -> void:
@@ -36,6 +39,8 @@ func _ready() -> void:
 				password_field.text = parsed.get("ap_password", "")
 
 	connect_button.pressed.connect(_on_connect_pressed)
+	main_menu_button.pressed.connect(_on_main_menu_pressed)
+	main_menu_button.process_mode = Node.PROCESS_MODE_ALWAYS
 	_update_status()
 	panel.visible = false
 	_visible = false
@@ -43,19 +48,63 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	panel.process_mode = Node.PROCESS_MODE_ALWAYS
 
-func _unhandled_key_input(event: InputEvent) -> void:
-	if event.pressed and not event.echo:
-		if event.keycode == KEY_F5:
-			if not _visible and Globals.save_file == null:
-				return
-			_visible = !_visible
-			panel.visible = _visible
-			if _visible:
-				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-				get_tree().paused = true
-			else:
-				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-				get_tree().paused = false
+func _process(_delta: float) -> void:
+	if _visible and Input.mouse_mode != Input.MOUSE_MODE_VISIBLE:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if Globals.save_file.id_name.is_empty():
+		_going_to_menu = false
+		return
+	if _force_open or _going_to_menu:
+		return
+	if ap_client.connect_state == ap_client.ConnectState.CONNECTED_TO_MULTIWORLD:
+		return
+	if not is_instance_valid(LevelChanger.current_level):
+		return
+	show_forced()
+
+func show_overlay() -> void:
+	if _visible:
+		return
+	_visible = true
+	panel.visible = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_apply_slot_lock()
+	if not ap_client.connect_state == ap_client.ConnectState.CONNECTING:
+		status_label.text = "Enter your Archipelago connection details."
+
+func show_forced() -> void:
+	_force_open = true
+	_visible = true
+	panel.visible = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	get_tree().set_deferred("paused", true)
+	_apply_slot_lock()
+	if not ap_client.connect_state == ap_client.ConnectState.CONNECTING:
+		status_label.text = "Archipelago connection required. Please connect to continue."
+
+func _apply_slot_lock() -> void:
+	if Globals.save_file.id_name.is_empty():
+		return
+	var saved_slot: String = Globals.save_file.get_meta("ap_slot_name", "")
+	if saved_slot != "":
+		player_field.text = saved_slot
+		player_field.editable = false
+	else:
+		player_field.editable = true
+
+func _on_main_menu_pressed() -> void:
+	_going_to_menu = true
+	_force_open = false
+	_visible = false
+	panel.visible = false
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	get_tree().paused = false
+
+func _input(event: InputEvent) -> void:
+	if not _visible:
+		return
+	if event.is_action("ui_cancel"):
+		get_viewport().set_input_as_handled()
 
 func _on_connect_pressed() -> void:
 	var server = server_field.text.strip_edges()
@@ -65,6 +114,12 @@ func _on_connect_pressed() -> void:
 	if server.is_empty() or player.is_empty():
 		status_label.text = "Server and player name are required."
 		return
+
+	if Globals.save_file != null:
+		var saved_slot: String = Globals.save_file.get_meta("ap_slot_name", "")
+		if saved_slot != "" and saved_slot != player:
+			status_label.text = "This save requires slot name: %s" % saved_slot
+			return
 
 	ap_client.server = server
 	ap_client.player = player
@@ -99,10 +154,17 @@ func _update_status(state: int = -1, error: int = 0) -> void:
 		ap_client.ConnectState.CONNECTED_TO_SERVER:
 			status_label.text = "Connected to server, processing datapackages..."
 		ap_client.ConnectState.CONNECTED_TO_MULTIWORLD:
+			if Globals.save_file != null:
+				var player: String = player_field.text.strip_edges()
+				if player != "":
+					Globals.save_file.set_meta("ap_slot_name", player)
+					Globals.save_game()
+			_force_open = false
 			status_label.text = "Connected to multiworld!"
 			panel.visible = false
 			_visible = false
-			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			if is_instance_valid(LevelChanger.current_level):
+				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 			get_tree().paused = false
 		ap_client.ConnectState.DISCONNECTING:
 			status_label.text = "Disconnecting..."
