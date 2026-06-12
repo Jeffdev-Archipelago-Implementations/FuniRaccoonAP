@@ -34,6 +34,8 @@ enum ConnectResult {
 	ALREADY_CONNECTED = 11
 }
 
+const _CACHE_DIR = "user://ap_datapackage_cache"
+
 class ApDataPackage:
 	# Per-game ID→name maps, keyed by game name.
 	var items_by_game: Dictionary      # { game_name: { id -> name } }
@@ -43,8 +45,11 @@ class ApDataPackage:
 	var location_id_to_name: Dictionary
 	var item_name_to_id: Dictionary
 	var location_name_to_id: Dictionary
+	# Stored so merge_game can update own-game flat maps when called after _init.
+	var _own_game: String = ""
 
 	func _init(data_package_object: Dictionary, own_game: String = ""):
+		_own_game = own_game
 		items_by_game = {}
 		locations_by_game = {}
 		item_id_to_name = {}
@@ -67,6 +72,14 @@ class ApDataPackage:
 			location_id_to_name = locations_by_game.get(own_game, {})
 			item_name_to_id = data_package_object.get("item_name_to_id", {})
 			location_name_to_id = data_package_object.get("location_name_to_id", {})
+
+	func merge_game(game_name: String, game_data: Dictionary) -> void:
+		_index_game(game_name, game_data)
+		if game_name == _own_game:
+			item_id_to_name = items_by_game[game_name]
+			location_id_to_name = locations_by_game[game_name]
+			item_name_to_id = game_data.get("item_name_to_id", {})
+			location_name_to_id = game_data.get("location_name_to_id", {})
 
 	func _index_game(game_name: String, game_data: Dictionary) -> void:
 		var item_map: Dictionary = {}
@@ -178,11 +191,41 @@ func connect_to_multiworld(get_data_package: bool = true) -> int:
 		room_info = await websocket_client.on_room_info
 
 		if get_data_package:
-			websocket_client.get_data_package([])
-			ModLoaderLog.info("Sent GetDataPackage (all games), awaiting response...", LOG_NAME)
-			var data_package_message = await websocket_client.on_data_package
-			data_package = ApDataPackage.new(data_package_message["data"], self.game)
-			ModLoaderLog.info("Got DataPackage! item_ids=%d location_ids=%d" % [data_package.item_id_to_name.size(), data_package.location_id_to_name.size()], LOG_NAME)
+			data_package = ApDataPackage.new({}, self.game)
+			var checksums: Dictionary = room_info.get("datapackage_checksums", {})
+			var games_in_room: Array = room_info.get("games", [])
+
+			# Load cached games and collect those that are missing or stale.
+			var games_to_fetch: Array = []
+			for game_name in games_in_room:
+				var cached = _load_cached_game(game_name, checksums.get(game_name, ""))
+				if cached != null:
+					data_package.merge_game(game_name, cached)
+				else:
+					games_to_fetch.append(game_name)
+
+			if not games_to_fetch.is_empty():
+				ModLoaderLog.info(
+					"Fetching DataPackage for %d/%d games in batches (rest cached)." % [games_to_fetch.size(), games_in_room.size()],
+					LOG_NAME
+				)
+				# Fetch in batches to keep each response payload small.
+				const BATCH_SIZE = 30
+				var batch_num = 0
+				while batch_num * BATCH_SIZE < games_to_fetch.size():
+					var batch = games_to_fetch.slice(batch_num * BATCH_SIZE, (batch_num + 1) * BATCH_SIZE)
+					ModLoaderLog.info("Fetching DataPackage batch %d (%d games)..." % [batch_num + 1, batch.size()], LOG_NAME)
+					websocket_client.get_data_package(batch)
+					var data_package_message = await websocket_client.on_data_package
+					var fetched_games: Dictionary = data_package_message["data"].get("games", {})
+					for game_name in fetched_games:
+						data_package.merge_game(game_name, fetched_games[game_name])
+						_save_cached_game(game_name, checksums.get(game_name, ""), fetched_games[game_name])
+					batch_num += 1
+			else:
+				ModLoaderLog.info("All %d games loaded from DataPackage cache." % games_in_room.size(), LOG_NAME)
+
+			ModLoaderLog.info("DataPackage ready. item_ids=%d location_ids=%d" % [data_package.item_id_to_name.size(), data_package.location_id_to_name.size()], LOG_NAME)
 
 	# Wait for the first response the server sends back
 	if not websocket_client.on_connected.is_connected(_connected_or_connection_refused_received):
@@ -198,6 +241,7 @@ func connect_to_multiworld(get_data_package: bool = true) -> int:
 	var connect_response = await _received_connect_response
 
 	if connect_response["cmd"] == "ConnectionRefused":
+		ModLoaderLog.warning("ConnectionRefused errors: %s" % JSON.stringify(connect_response.get("errors", [])), LOG_NAME)
 		# There may be multiple errors, but there isn't a clean way in Godot to return
 		# them all. Just return the first error the multiworld server sent us.
 		var ap_error: int
@@ -264,6 +308,36 @@ func disconnect_from_multiworld():
 	self.websocket_client.disconnect_from_server()
 	_set_connection_state(ConnectState.DISCONNECTED)
 	self.player_tags = []
+
+func _cache_path(game_name: String) -> String:
+	# Replace characters that are invalid in filenames.
+	var safe_name = game_name.replace("/", "_").replace("\\", "_").replace(":", "_")
+	return "%s/%s.json" % [_CACHE_DIR, safe_name]
+
+func _load_cached_game(game_name: String, expected_checksum: String) -> Variant:
+	var path = _cache_path(game_name)
+	if not FileAccess.file_exists(path):
+		return null
+	var f = FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return null
+	var parsed = JSON.parse_string(f.get_as_text())
+	f.close()
+	if parsed == null or not parsed.has("checksum") or not parsed.has("data"):
+		return null
+	if parsed["checksum"] != expected_checksum:
+		return null
+	return parsed["data"]
+
+func _save_cached_game(game_name: String, checksum: String, game_data: Dictionary) -> void:
+	DirAccess.make_dir_recursive_absolute(_CACHE_DIR)
+	var path = _cache_path(game_name)
+	var f = FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		ModLoaderLog.warning("Could not write DataPackage cache for '%s'" % game_name, LOG_NAME)
+		return
+	f.store_string(JSON.stringify({"checksum": checksum, "data": game_data}))
+	f.close()
 
 func _set_connection_state(state: int, error: int = 0):
 	ModLoaderLog.debug("Setting connection state to %s." % ConnectState.keys()[state], LOG_NAME)
