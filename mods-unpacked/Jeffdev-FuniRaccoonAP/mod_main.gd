@@ -1,7 +1,7 @@
 extends Node
 
 const MOD_NAME = "Jeffdev-FuniRaccoonAP"
-const MOD_VERSION = "1.5.3"
+const MOD_VERSION = "1.5.5"
 const LOG_NAME = MOD_NAME + "/mod_main"
 const CONFIG_PATH = "user://ap_connect.json"
 
@@ -59,7 +59,19 @@ func _ready() -> void:
 	if rackheath_info != null:
 		rackheath_info.level_cluster = 1
 		rackheath_info.level_found = true
-		rackheath_info.level_icon = load("res://Scene/characters/police/moai.tscn")
+		var rackheath_icon = load("res://Scene/characters/police/moai.tscn")
+		rackheath_info.level_icon = rackheath_icon
+		# NOTE: moai.tscn is a full NPC scene, not a map-icon resource. If the Act 1
+		# cluster orb crashes, this is the prime suspect (see _log_cluster_levels).
+		ModLoaderLog.info(
+			"Rackheath (DEFAULT) -> cluster 1, level_found=true, level_icon=%s [%s]" % [
+				str(rackheath_icon),
+				("PackedScene" if rackheath_icon is PackedScene else "UNEXPECTED-TYPE")
+			],
+			LOG_NAME
+		)
+	else:
+		ModLoaderLog.warning("Rackheath (DEFAULT) missing from LevelChanger.all_levels; not registered.", LOG_NAME)
 
 	LevelChanger.level_Changed.connect(func(level_id: level_changer.LEVEL_ID):
 		ap_client.update_map_location(level_id)
@@ -161,7 +173,13 @@ func _on_node_added(node: Node) -> void:
 		)
 
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/LevelSelectOrb/level_select_orb.gd":
+		# Log the cluster contents the instant the orb script is added, BEFORE _ready
+		# instantiates every level_icon. If the game freezes/crashes after this line
+		# with no matching "orb ready" line below, the crash is during icon build —
+		# check which levels (esp. Rackheath/DEFAULT) were about to be drawn.
+		_log_cluster_levels(node.get("level_cluster_id"))
 		node.ready.connect(func():
+			ModLoaderLog.info("Level select orb ready (cluster_id=%s)" % str(node.get("level_cluster_id")), LOG_NAME)
 			var player = Globals.get_player()
 			if is_instance_valid(player):
 				var pickup = player.get_node_or_null("pivotCotainer/PickupPivot")
@@ -416,10 +434,16 @@ func _on_node_added(node: Node) -> void:
 		if ap_received and not player_collected:
 			Globals.save_file.states_occurred.erase(jewel_flag)
 		node.ready.connect(func():
+			if player_collected:
+				if is_instance_valid(node.jewel):
+					node.jewel.queue_free()
+				return
 			if ap_received and not player_collected:
 				if not Globals.save_file.states_occurred.has(jewel_flag):
 					Globals.save_file.states_occurred.append(jewel_flag)
 			if is_instance_valid(node.jewel):
+				for conn in node.jewel.eaten_signal.get_connections():
+					node.jewel.eaten_signal.disconnect(conn["callable"])
 				node.jewel.eaten_signal.connect(func(_player):
 					ap_client.jewel_collected(jewel_flag)
 				)
@@ -531,6 +555,42 @@ func _on_node_added(node: Node) -> void:
 			_setup_save_file_select(node)
 		, CONNECT_ONE_SHOT)
 
+	# Item list checkmarks: use ap_stored_items (sent checks) instead of items_stored (received).
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Player Stuff/menu/objectives_list.gd":
+		node.ready.connect(func():
+			_ap_rebuild_objectives_list(node)
+		, CONNECT_ONE_SHOT)
+
+	# Paper counter: show checks sent rather than items received.
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Player Stuff/menu/items_left_new.gd":
+		node.ready.connect(func():
+			_ap_fix_items_left_counter(node)
+		, CONNECT_ONE_SHOT)
+
+# dump every level the cluster orb is about to draw, with its icon and found state for debugging
+func _log_cluster_levels(cluster_id) -> void:
+	if cluster_id == null:
+		ModLoaderLog.warning("Cluster orb added but level_cluster_id is null.", LOG_NAME)
+		return
+	ModLoaderLog.info("=== Cluster %s orb building. Levels in cluster: ===" % str(cluster_id), LOG_NAME)
+	for level_id in LevelChanger.all_levels:
+		var info = LevelChanger.all_levels[level_id]
+		if info == null or info.level_cluster != cluster_id:
+			continue
+		if not info.level_found:
+			continue
+		var icon = info.level_icon
+		var icon_kind: String = "null"
+		if icon != null:
+			icon_kind = "PackedScene" if icon is PackedScene else ("Texture" if icon is Texture2D else icon.get_class())
+		ModLoaderLog.info(
+			"  level=%s found=%s icon=%s [%s]" % [
+				str(level_id), str(info.level_found), str(icon), icon_kind
+			],
+			LOG_NAME
+		)
+	ModLoaderLog.info("=== end cluster %s level list ===" % str(cluster_id), LOG_NAME)
+
 func _scan_existing_save_select() -> void:
 	for n in get_tree().root.find_children("*", "", true, false):
 		if n.get_script() != null and n.get_script().resource_path == "res://Scene/MainMenu/save_file_select_logic.gd":
@@ -606,3 +666,99 @@ func _on_quit_pressed() -> void:
 	ModLoaderLog.info("Quit pressed, disconnecting from AP.", LOG_NAME)
 	if ap_client:
 		ap_client.disconnect_from_multiworld()
+
+func _ap_rebuild_objectives_list(node: Node) -> void:
+	var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
+	var ITEM_LIST_ITEM = load("res://Scene/Menus/item_list_item.tscn")
+	var v_box_container: VBoxContainer = node.get_node("Control/VBoxContainer")
+
+	for child in v_box_container.get_children():
+		child.queue_free()
+
+	var current_world = Globals.get_current_world()
+	if current_world == null:
+		return
+
+	var items_in_level: Dictionary = {}
+	for item_id in current_world.items_in_levels as Array[item_tracker.item_id]:
+		if not ItemTacker.item_list_data.has(item_id):
+			continue
+		var item_inst: InteractData = ItemTacker.item_list_data[item_id].instantiate()
+		if item_inst.item_list_ignore:
+			item_inst.queue_free()
+			continue
+		items_in_level[item_id] = [item_inst.obj_name, item_inst.hud_icon]
+		item_inst.queue_free()
+
+	if items_in_level.is_empty():
+		return
+
+	var items_listed: Array = []
+	var total_sent: int = 0
+
+	for key in items_in_level.keys():
+		if items_listed.has(key):
+			continue
+		var item_sent: bool = ap_stored.has(key)
+		if item_sent:
+			total_sent += 1
+		items_listed.append(key)
+		var item_menu = ITEM_LIST_ITEM.instantiate()
+		v_box_container.add_child(item_menu)
+		if not Globals.save_file.items_found.has(key) and not Globals.save_file.items_stored.has(key):
+			item_menu.populate("???????", items_in_level[key][1])
+		else:
+			item_menu.populate(items_in_level[key][0], items_in_level[key][1], item_sent)
+		# populate's decompiled body is incomplete — set scribble directly.
+		var scribble = item_menu.get_node_or_null("Label/Scribble")
+		if scribble != null:
+			scribble.visible = item_sent
+
+	var complete = node.get_node_or_null("../../position/complete")
+	if complete != null:
+		if total_sent == items_in_level.keys().size():
+			complete.show()
+			var ap = complete.get_node_or_null("AnimationPlayer")
+			if ap:
+				ap.play("show")
+		else:
+			complete.hide()
+
+func _ap_fix_items_left_counter(node: Node) -> void:
+	var current_world = Globals.get_current_world()
+	if current_world == null:
+		return
+	var item_info = node.get_node_or_null("Container/SubViewport/CanvasLayer")
+	if item_info == null or not item_info.has_method("items_left"):
+		return
+	var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
+	var total: int = current_world.items_in_levels.size()
+	var level_name: String = LevelChanger.all_levels[current_world.level_id].level_name
+	# Mirror populate_list's loop structure exactly: skip items not in item_list_data
+	# BEFORE the await (same as populate_list does), so our timers stay in lockstep with
+	# populate_list's and our grid_idx matches the child that was just added each tick.
+	var grid = node.get_node_or_null("Control/Grid")
+	var grid_idx: int = 0
+	var count: int = 0
+	var info_label = item_info.get_node_or_null("Control/VBoxContainer/info")
+	for item_id in current_world.items_in_levels:
+		if not ItemTacker.item_list_data.has(item_id):
+			continue
+		await node.get_tree().create_timer(0.1, true, false, true).timeout
+		if not is_instance_valid(node):
+			return
+		if ap_stored.has(item_id):
+			count += 1
+		item_info.items_left(count, total, level_name)
+		if info_label != null:
+			info_label.text = str(count) + "/" + str(total) + " checks\nsent"
+		# Fix the scribble on the icon populate_list just added for this item.
+		if grid != null:
+			var grid_children: Array = grid.get_children()
+			if grid_idx < grid_children.size():
+				var icon = grid_children[grid_idx]
+				if icon.has_method("set_val"):
+					var item_inst: InteractData = ItemTacker.item_list_data[item_id].instantiate()
+					icon.set_val(item_inst.hud_icon, Globals.save_file.items_found.has(item_id), ap_stored.has(item_id))
+					item_inst.queue_free()
+		grid_idx += 1

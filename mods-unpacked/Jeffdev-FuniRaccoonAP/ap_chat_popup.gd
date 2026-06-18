@@ -80,16 +80,16 @@ func _input(event: InputEvent) -> void:
 					msg += chk.call("Cooling Rod (Plimbo)", item_tracker.item_id.COOLING_ROD_PLIMBO) + "\n"
 					msg += chk.call("Cooling Rod (Fridge King)", item_tracker.item_id.COOLING_ROD_FRIDGE_KING)
 				"lugh":
-					var states: Array = Globals.save_file.states_occurred
-					var chk_jewel := func(label: String, flag: String) -> String:
-						var has_it: bool = states.has(flag)
+					var received_jewels: Array = Globals.save_file.get_meta("ap_received_jewels", [])
+					var chk_jewel := func(label: String, ap_item_id: int) -> String:
+						var has_it: bool = received_jewels.has(ap_item_id)
 						return "[color=%s]%s %s[/color]" % ["#00FF7F" if has_it else "#EE0000", "✓" if has_it else "✗", label]
 					msg = "[color=#FAFAD2]Goal: Lugh[/color] - %d/50 items\n" % count
 					msg += chk.call("Kei Truck", item_tracker.item_id.KEI_TRUCK) + "\n"
-					msg += chk_jewel.call("Mystical Gem (Green)", "jewel_1_eaten") + "\n"
-					msg += chk_jewel.call("Mystical Gem (Blue)", "jewel_2_eaten") + "\n"
-					msg += chk_jewel.call("Mystical Gem (Purple)", "jewel_3_eaten") + "\n"
-					msg += chk_jewel.call("Mystical Gem (Red)", "jewel_4_eaten")
+					msg += chk_jewel.call("Mystical Gem (Green)", 601) + "\n"
+					msg += chk_jewel.call("Mystical Gem (Blue)", 602) + "\n"
+					msg += chk_jewel.call("Mystical Gem (Purple)", 603) + "\n"
+					msg += chk_jewel.call("Mystical Gem (Red)", 604)
 				_:
 					msg = "[color=#FAFAD2]Goal: %s[/color]" % goal
 			show_message(msg, get_tree().get_root())

@@ -47,12 +47,20 @@ func _process(_delta: float) -> void:
 	if current_id == _last_shown_level_id:
 		return
 	_last_shown_level_id = current_id
+	var items = icon.get("items")
+	if items == null or not (items is Array):
+		ModLoaderLog.warning(
+			"Selected level icon (level_id=%d) has no valid 'items' array; skipping counter." % current_id,
+			"Jeffdev-FuniRaccoonAP/LevelAccessGuard"
+		)
+		return
 	var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
 	var count: int = 0
-	for item_id in icon.items:
+	for item_id in items:
 		if ap_stored.has(item_id):
 			count += 1
-	_orb.items_got_text.text = "[shake]Items Got: " + str(count) + "/" + str(icon.items.size())
+	if is_instance_valid(_orb.get("items_got_text")):
+		_orb.items_got_text.text = "[shake]Items Got: " + str(count) + "/" + str(items.size())
 
 func _input(event: InputEvent) -> void:
 	if not is_instance_valid(_orb):
