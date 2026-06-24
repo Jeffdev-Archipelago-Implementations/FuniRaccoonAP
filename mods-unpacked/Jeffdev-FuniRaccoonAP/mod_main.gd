@@ -1,7 +1,7 @@
 extends Node
 
 const MOD_NAME = "Jeffdev-FuniRaccoonAP"
-const MOD_VERSION = "1.5.5"
+const MOD_VERSION = "1.5.6"
 const LOG_NAME = MOD_NAME + "/mod_main"
 const CONFIG_PATH = "user://ap_connect.json"
 
@@ -55,24 +55,6 @@ func _ready() -> void:
 	get_tree().node_added.connect(_on_node_added)
 	call_deferred("_scan_existing_save_select")
 
-	var rackheath_info = LevelChanger.all_levels.get(level_changer.LEVEL_ID.DEFAULT)
-	if rackheath_info != null:
-		rackheath_info.level_cluster = 1
-		rackheath_info.level_found = true
-		var rackheath_icon = load("res://Scene/characters/police/moai.tscn")
-		rackheath_info.level_icon = rackheath_icon
-		# NOTE: moai.tscn is a full NPC scene, not a map-icon resource. If the Act 1
-		# cluster orb crashes, this is the prime suspect (see _log_cluster_levels).
-		ModLoaderLog.info(
-			"Rackheath (DEFAULT) -> cluster 1, level_found=true, level_icon=%s [%s]" % [
-				str(rackheath_icon),
-				("PackedScene" if rackheath_icon is PackedScene else "UNEXPECTED-TYPE")
-			],
-			LOG_NAME
-		)
-	else:
-		ModLoaderLog.warning("Rackheath (DEFAULT) missing from LevelChanger.all_levels; not registered.", LOG_NAME)
-
 	LevelChanger.level_Changed.connect(func(level_id: level_changer.LEVEL_ID):
 		ap_client.update_map_location(level_id)
 		match level_id:
@@ -89,6 +71,8 @@ func _on_node_added(node: Node) -> void:
 		if node.get_script().resource_path == "res://Scene/Menus/quit_menu.gd":
 			ModLoaderLog.info("Found quit button, connecting pressed signal.", LOG_NAME)
 			node.pressed.connect(_on_quit_pressed)
+			# Add a "To Rackheath" entry beside Quit
+			call_deferred("_add_rackheath_pause_option", node)
 
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Menus/setup/load_game.gd":
 		node.ready.connect(func():
@@ -100,7 +84,7 @@ func _on_node_added(node: Node) -> void:
 		node.ready.connect(func():
 			node.body_entered.disconnect(node._on_body_entered)
 			node.body_entered.connect(func(body):
-				if body is PlayerScript and not node.random:
+				if not node.random:
 					var level_id = node.level_id
 					var LevelAccessGuard = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/level_access_guard.gd")
 					var required: int = LevelAccessGuard.get_required_for_level(level_id)
@@ -114,6 +98,9 @@ func _on_node_added(node: Node) -> void:
 							],
 							LOG_NAME
 						)
+						var connected: bool = ap_client.connect_state == ap_client.ConnectState.CONNECTED_TO_MULTIWORLD
+						var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
+						popup_script.show_message(LevelAccessGuard.locked_message(level_id, connected, have), get_tree().get_root())
 						return
 				node._on_body_entered(body)
 			)
@@ -667,6 +654,63 @@ func _on_quit_pressed() -> void:
 	if ap_client:
 		ap_client.disconnect_from_multiworld()
 
+func _add_rackheath_pause_option(quit_button: Node) -> void:
+	if not is_instance_valid(quit_button):
+		return
+	# Don't offer "To Rackheath" while already in Rackheath.
+	if LevelChanger.current_level != null and LevelChanger.current_level.level_id == level_changer.LEVEL_ID.DEFAULT:
+		return
+	var parent = quit_button.get_parent()
+	if parent == null or parent.has_node("RackheathOption"):
+		return
+
+	# Clone the Quit button so we inherit its styling; drop signals/script so its
+	# quit behaviour isn't copied.
+	var btn = quit_button.duplicate(DUPLICATE_GROUPS)
+	btn.name = "RackheathOption"
+	btn.set_script(null)
+	if "text" in btn:
+		btn.text = "To Rackheath"
+	for lbl in btn.find_children("*", "Label", true, false):
+		lbl.text = "To Rackheath"
+	for lbl in btn.find_children("*", "RichTextLabel", true, false):
+		lbl.text = "To Rackheath"
+	parent.add_child(btn)
+	parent.move_child(btn, quit_button.get_index())
+
+	if not (parent is Container) and quit_button is Control and btn is Control:
+		btn.position = quit_button.position - Vector2(0, quit_button.size.y + 8)
+
+	if not btn.has_signal("pressed"):
+		ModLoaderLog.warning("Rackheath pause option: cloned button has no 'pressed' signal.", LOG_NAME)
+		return
+	for conn in btn.pressed.get_connections():
+		btn.pressed.disconnect(conn["callable"])
+	btn.pressed.connect(func():
+		if Globals.save_file == null:
+			return
+		if LevelChanger.current_level != null and LevelChanger.current_level.level_id == level_changer.LEVEL_ID.DEFAULT:
+			return
+		ModLoaderLog.info("Pause menu: loading Rackheath (DEFAULT).", LOG_NAME)
+		# Close the pause menu and unpause so the level transition plays normally.
+		var menu := _find_pause_menu_root(btn)
+		if is_instance_valid(menu):
+			menu.queue_free()
+		MenuController.menus_transiting = false
+		get_tree().paused = false
+		LevelChanger.LOAD_FROM_LEVEL_WITH_SHORT_ID(level_changer.LEVEL_ID.DEFAULT, Globals.player_inst, "START_SPAWN")
+	)
+	ModLoaderLog.success("Rackheath pause option added under '%s'." % parent.name, LOG_NAME)
+	
+func _find_pause_menu_root(from: Node) -> Node:
+	var n: Node = from
+	while n != null:
+		var s = n.get_script()
+		if s != null and "pause_menu" in s.resource_path:
+			return n
+		n = n.get_parent()
+	return null
+
 func _ap_rebuild_objectives_list(node: Node) -> void:
 	var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
 	var ITEM_LIST_ITEM = load("res://Scene/Menus/item_list_item.tscn")
@@ -678,10 +722,16 @@ func _ap_rebuild_objectives_list(node: Node) -> void:
 	var current_world = Globals.get_current_world()
 	if current_world == null:
 		return
+	var level_items = current_world.get("items_in_levels")
+	if level_items == null or not (level_items is Array):
+		return
 
 	var items_in_level: Dictionary = {}
-	for item_id in current_world.items_in_levels as Array[item_tracker.item_id]:
+	for item_id in level_items as Array[item_tracker.item_id]:
 		if not ItemTacker.item_list_data.has(item_id):
+			continue
+		# Only list items that are actual AP checks; skip non-randomized level items.
+		if not ap_client.ITEM_ID_TO_AP_LOCATION.has(item_id):
 			continue
 		var item_inst: InteractData = ItemTacker.item_list_data[item_id].instantiate()
 		if item_inst.item_list_ignore:
@@ -709,7 +759,6 @@ func _ap_rebuild_objectives_list(node: Node) -> void:
 			item_menu.populate("???????", items_in_level[key][1])
 		else:
 			item_menu.populate(items_in_level[key][0], items_in_level[key][1], item_sent)
-		# populate's decompiled body is incomplete — set scribble directly.
 		var scribble = item_menu.get_node_or_null("Label/Scribble")
 		if scribble != null:
 			scribble.visible = item_sent
@@ -728,36 +777,45 @@ func _ap_fix_items_left_counter(node: Node) -> void:
 	var current_world = Globals.get_current_world()
 	if current_world == null:
 		return
+	var level_items = current_world.get("items_in_levels")
+	if level_items == null or not (level_items is Array):
+		return
+	if not LevelChanger.all_levels.has(current_world.level_id):
+		return
 	var item_info = node.get_node_or_null("Container/SubViewport/CanvasLayer")
 	if item_info == null or not item_info.has_method("items_left"):
 		return
 	var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
-	var total: int = current_world.items_in_levels.size()
+	# Count only items that are actual AP checks, to match the filtered list.
+	var total: int = 0
+	for item_id in level_items:
+		if ItemTacker.item_list_data.has(item_id) and ap_client.ITEM_ID_TO_AP_LOCATION.has(item_id):
+			total += 1
 	var level_name: String = LevelChanger.all_levels[current_world.level_id].level_name
-	# Mirror populate_list's loop structure exactly: skip items not in item_list_data
-	# BEFORE the await (same as populate_list does), so our timers stay in lockstep with
-	# populate_list's and our grid_idx matches the child that was just added each tick.
 	var grid = node.get_node_or_null("Control/Grid")
 	var grid_idx: int = 0
 	var count: int = 0
 	var info_label = item_info.get_node_or_null("Control/VBoxContainer/info")
-	for item_id in current_world.items_in_levels:
+	for item_id in level_items:
 		if not ItemTacker.item_list_data.has(item_id):
 			continue
 		await node.get_tree().create_timer(0.1, true, false, true).timeout
 		if not is_instance_valid(node):
 			return
-		if ap_stored.has(item_id):
+		var is_check: bool = ap_client.ITEM_ID_TO_AP_LOCATION.has(item_id)
+		if is_check and ap_stored.has(item_id):
 			count += 1
 		item_info.items_left(count, total, level_name)
 		if info_label != null:
 			info_label.text = str(count) + "/" + str(total) + " checks\nsent"
-		# Fix the scribble on the icon populate_list just added for this item.
 		if grid != null:
 			var grid_children: Array = grid.get_children()
 			if grid_idx < grid_children.size():
 				var icon = grid_children[grid_idx]
-				if icon.has_method("set_val"):
+				if not is_check:
+					# Non-check item: hide its icon so the grid only shows checks.
+					icon.visible = false
+				elif icon.has_method("set_val"):
 					var item_inst: InteractData = ItemTacker.item_list_data[item_id].instantiate()
 					icon.set_val(item_inst.hud_icon, Globals.save_file.items_found.has(item_id), ap_stored.has(item_id))
 					item_inst.queue_free()

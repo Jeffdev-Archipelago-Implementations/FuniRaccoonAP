@@ -344,10 +344,24 @@ func _ready() -> void:
 	connection_state_changed.connect(_on_connection_state_changed)
 	websocket_client.on_print_json.connect(_on_print_json)
 
+# Boilerplate server/boot messages shown on connect that we don't want in chat.
+const FILTERED_MESSAGE_SUBSTRINGS: Array = [
+	"does not support compressed",
+	"Now that you are connected",
+]
+
 func _on_print_json(command: Dictionary) -> void:
 	var parts: Array = command.get("data", [])
 	if parts.is_empty():
 		return
+	if str(command.get("type", "")) == "Tutorial":
+		return
+	var plain := ""
+	for part in parts:
+		plain += str(part.get("text", ""))
+	for needle in FILTERED_MESSAGE_SUBSTRINGS:
+		if plain.find(needle) != -1:
+			return
 	var bbcode := ""
 	for part in parts:
 		var text: String = str(part.get("text", ""))
@@ -396,7 +410,31 @@ func _on_print_json(command: Dictionary) -> void:
 	if bbcode.strip_edges().is_empty():
 		return
 	var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
-	popup_script.show_message(bbcode, get_tree().get_root())
+	popup_script.show_message(bbcode, get_tree().get_root(), _print_json_is_relevant(command, parts))
+
+# Whether a PrintJSON message involves the local player, for the "your messages only"
+# chat filter (F4). Item/hint messages count when you are the sender or receiver;
+# other messages count when they reference your slot. Server replies and global
+# countdowns always count.
+func _print_json_is_relevant(command: Dictionary, parts: Array) -> bool:
+	var me: int = slot
+	match str(command.get("type", "")):
+		"ItemSend", "Hint":
+			if int(command.get("receiving", -1)) == me:
+				return true
+			var item_dict = command.get("item", null)
+			if item_dict is Dictionary and int(item_dict.get("player", -1)) == me:
+				return true
+			return false
+		"CommandResult", "AdminCommandResult", "Countdown":
+			return true
+		_:
+			if int(command.get("slot", -1)) == me:
+				return true
+			for part in parts:
+				if str(part.get("type", "")) == "player_id" and int(str(part.get("text", "-1"))) == me:
+					return true
+			return false
 
 func _show_popup(item_name: String, fallback: String, item_dict: Dictionary, show: bool) -> void:
 	if not show:
@@ -575,9 +613,9 @@ func _on_connection_state_changed(new_state: int, _error: int = 0) -> void:
 		sync_stored_items()
 		var rackheath = LevelChanger.all_levels.get(level_changer.LEVEL_ID.DEFAULT)
 		if rackheath != null:
-			rackheath.level_found = true
-		if not Globals.save_file.found_levels.has(level_changer.LEVEL_ID.DEFAULT):
-			Globals.save_file.found_levels.append(level_changer.LEVEL_ID.DEFAULT)
+			rackheath.level_found = false
+		if Globals.save_file.found_levels.has(level_changer.LEVEL_ID.DEFAULT):
+			Globals.save_file.found_levels.erase(level_changer.LEVEL_ID.DEFAULT)
 			Globals.save_game()
 		var on_rackheath = LevelChanger.current_level != null and LevelChanger.current_level.level_id == level_changer.LEVEL_ID.DEFAULT
 		if not on_rackheath:
@@ -594,9 +632,10 @@ func _on_connection_state_changed(new_state: int, _error: int = 0) -> void:
 					"START_SPAWN"
 				)
 		var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
-		popup_script.show_message("Controls: [color=#FAFAD2]F2[/color]: Goal | [color=#FAFAD2]F3[/color]: Toggle Popups | [color=#FAFAD2]F6[/color]: Toggle Messages", get_tree().get_root())
+		popup_script.show_message("Controls: [color=#FAFAD2]F2[/color]: Goal | [color=#FAFAD2]F3[/color]: Toggle Popups | [color=#FAFAD2]F4[/color]: Filter Messages | [color=#FAFAD2]F6[/color]: Toggle Messages", get_tree().get_root())
 	elif new_state == ConnectState.DISCONNECTED:
 		var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
+		popup_script.clear_all()
 		popup_script.show_message("[color=#EE0000]Disconnected from Archipelago[/color]", get_tree().get_root())
 		Globals.QUIT_TO_MEUN()
 

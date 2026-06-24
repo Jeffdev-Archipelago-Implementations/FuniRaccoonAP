@@ -9,11 +9,13 @@ const MESSAGE_DURATION = 7.5
 const TOGGLE_KEY = KEY_F6
 const GOAL_KEY = KEY_F2
 const POPUP_TOGGLE_KEY = KEY_F3
+const FILTER_KEY = KEY_F4
 
 static var _manager: CanvasLayer = null
 static var _vbox: VBoxContainer = null
 static var _messages: Array = []  # Active RichTextLabel nodes
 static var _chat_visible: bool = true
+static var _relevant_only: bool = false
 static var _hiding: bool = false
 static var _ap_client = null
 
@@ -42,6 +44,15 @@ func _input(event: InputEvent) -> void:
 			popup_script._enabled = not popup_script._enabled
 			var state := "Enabled" if popup_script._enabled else "Disabled"
 			show_message("[color=#FAFAD2]Item Popups: %s[/color]" % state, get_tree().get_root())
+		elif event.keycode == FILTER_KEY:
+			_relevant_only = not _relevant_only
+			# Re-apply visibility to messages already on screen.
+			for m in _messages:
+				if is_instance_valid(m):
+					var rel: bool = m.get_meta("ap_relevant", true)
+					m.visible = _chat_visible and (rel or not _relevant_only)
+			var filter_state := "Showing Your Messages Only" if _relevant_only else "Showing All Messages"
+			show_message("[color=#FAFAD2]%s[/color]" % filter_state, get_tree().get_root())
 		elif event.keycode == GOAL_KEY:
 			if not is_instance_valid(_ap_client):
 				return
@@ -101,8 +112,16 @@ static func _clear_messages() -> void:
 			msg.queue_free()
 	_messages.clear()
 
-static func show_message(bbcode_text: String, root: Node) -> void:
+# Clear every queued/visible popup (e.g. on AP disconnect).
+static func clear_all() -> void:
+	_clear_messages()
+
+static func show_message(bbcode_text: String, root: Node, relevant := true) -> void:
 	if _hiding:
+		return
+	# When the "your messages only" filter (F4) is on, drop irrelevant AP messages.
+	# Mod-generated messages default to relevant := true so they always show.
+	if _relevant_only and not relevant:
 		return
 	if not is_instance_valid(_manager):
 		_create_manager(root)
@@ -116,7 +135,7 @@ static func show_message(bbcode_text: String, root: Node) -> void:
 		if is_instance_valid(oldest):
 			oldest.queue_free()
 
-	_add_label(bbcode_text)
+	_add_label(bbcode_text, relevant)
 
 static func _create_manager(root: Node) -> void:
 	_manager = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd").new()
@@ -134,8 +153,9 @@ static func _create_manager(root: Node) -> void:
 	_manager.add_child(_vbox)
 	root.add_child(_manager)
 
-static func _add_label(bbcode_text: String) -> void:
+static func _add_label(bbcode_text: String, relevant := true) -> void:
 	var label := RichTextLabel.new()
+	label.set_meta("ap_relevant", relevant)
 	label.bbcode_enabled = true
 	label.fit_content = true
 	label.custom_minimum_size = Vector2(280, 0)

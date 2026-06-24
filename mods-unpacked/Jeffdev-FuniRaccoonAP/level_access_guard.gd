@@ -37,6 +37,30 @@ static func get_required_for_level(level_id: level_changer.LEVEL_ID) -> int:
 func _get_required(level_id: level_changer.LEVEL_ID) -> int:
 	return get_required_for_level(level_id)
 
+# Human-readable name of the specific item a level needs (beyond the item count).
+static func _missing_item_text(level_id: level_changer.LEVEL_ID) -> String:
+	if level_id == level_changer.LEVEL_ID.RBMK:
+		return "a Cooling Rod"
+	return ""
+
+# Builds the "area locked" chat message describing why the level can't be entered yet.
+static func locked_message(level_id: level_changer.LEVEL_ID, connected: bool, have: int) -> String:
+	var header := "[color=#EE0000]This area is currently locked![/color]"
+	if not connected:
+		return header + " Connect to Archipelago first."
+	var needs: Array = []
+	var required: int = get_required_for_level(level_id)
+	if have < required:
+		var diff: int = required - have
+		needs.append("%d more dumpstered item%s (%d/%d)" % [diff, ("s" if diff != 1 else ""), have, required])
+	if not item_requirement_met(level_id):
+		var item_txt: String = _missing_item_text(level_id)
+		if item_txt != "":
+			needs.append(item_txt)
+	if needs.is_empty():
+		return header
+	return header + " You need: " + ", ".join(needs) + "."
+
 func _process(_delta: float) -> void:
 	if not is_instance_valid(_orb):
 		return
@@ -60,7 +84,7 @@ func _process(_delta: float) -> void:
 		if ap_stored.has(item_id):
 			count += 1
 	if is_instance_valid(_orb.get("items_got_text")):
-		_orb.items_got_text.text = "[shake]Items Got: " + str(count) + "/" + str(items.size())
+		_orb.items_got_text.text = "[shake]Checks Sent: " + str(count) + "/" + str(items.size())
 
 func _input(event: InputEvent) -> void:
 	if not is_instance_valid(_orb):
@@ -89,6 +113,8 @@ func _input(event: InputEvent) -> void:
 				],
 				"Jeffdev-FuniRaccoonAP/LevelAccessGuard"
 			)
+			var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
+			popup_script.show_message(locked_message(level_id, connected, have), get_tree().get_root())
 			LevelChanger.LOAD_FROM_LEVEL_SELECT_WITH_ID(level_changer.LEVEL_ID.MAIN_MENU)
 		else:
 			if is_instance_valid(ap_client):

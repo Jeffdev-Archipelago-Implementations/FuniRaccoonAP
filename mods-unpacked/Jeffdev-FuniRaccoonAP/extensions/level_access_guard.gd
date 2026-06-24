@@ -54,7 +54,7 @@ func _process(_delta: float) -> void:
 	for item_id in icon.items:
 		if ap_stored.has(item_id):
 			count += 1
-	_orb.items_got_text.text = "[shake]Items Got: " + str(count) + "/" + str(icon.items.size())
+	_orb.items_got_text.text = "[shake]Checks Sent: " + str(count) + "/" + str(icon.items.size())
 
 func _input(event: InputEvent) -> void:
 	if not is_instance_valid(_orb):
