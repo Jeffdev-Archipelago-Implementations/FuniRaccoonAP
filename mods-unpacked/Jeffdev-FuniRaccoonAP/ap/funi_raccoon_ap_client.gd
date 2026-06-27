@@ -642,9 +642,16 @@ func _on_connection_state_changed(new_state: int, _error: int = 0) -> void:
 func sync_stored_items() -> void:
 	var thrown: Array = Globals.save_file.get_meta("ap_stored_items", [])
 	ModLoaderLog.info("Syncing %d dumpster'd items to AP" % thrown.size(), _LOG)
+	var found_changed := false
 	for id in thrown:
 		if ITEM_ID_TO_AP_LOCATION.has(id):
 			check_location(ITEM_ID_TO_AP_LOCATION[id])
+		# Backfill: stored items count as found (for saves from before this change).
+		if not Globals.save_file.items_found.has(id):
+			Globals.save_file.items_found.append(id)
+			found_changed = true
+	if found_changed:
+		Globals.save_game()
 
 	var eaten_dumbbells: Array = Globals.save_file.get_meta("ap_eaten_dumbbells", [])
 	ModLoaderLog.info("Syncing %d eaten dumbbells to AP" % eaten_dumbbells.size(), _LOG)
@@ -799,9 +806,16 @@ func item_stored(id: item_tracker.item_id) -> void:
 		)
 		return
 	var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
+	var changed := false
 	if not ap_stored.has(id):
 		ap_stored.append(id)
 		Globals.save_file.set_meta("ap_stored_items", ap_stored)
+		changed = true
+	# A stored (dumpster'd) item also counts as found.
+	if not Globals.save_file.items_found.has(id):
+		Globals.save_file.items_found.append(id)
+		changed = true
+	if changed:
 		Globals.save_game()
 	if connect_state != ConnectState.CONNECTED_TO_MULTIWORLD:
 		return

@@ -584,6 +584,8 @@ func _scan_existing_save_select() -> void:
 			_setup_save_file_select(n)
 
 func _setup_save_file_select(node: Node) -> void:
+	if not is_instance_valid(node):
+		return
 	if is_instance_valid(node.get_node_or_null("APInfoLabel")):
 		return
 	var ap_label := RichTextLabel.new()
@@ -712,6 +714,10 @@ func _find_pause_menu_root(from: Node) -> Node:
 	return null
 
 func _ap_rebuild_objectives_list(node: Node) -> void:
+	# The captured node can be freed before this deferred ready callback runs (e.g.
+	# opening/closing the menu quickly), arriving here as null.
+	if not is_instance_valid(node):
+		return
 	var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
 	var ITEM_LIST_ITEM = load("res://Scene/Menus/item_list_item.tscn")
 	var v_box_container: VBoxContainer = node.get_node("Control/VBoxContainer")
@@ -774,6 +780,9 @@ func _ap_rebuild_objectives_list(node: Node) -> void:
 			complete.hide()
 
 func _ap_fix_items_left_counter(node: Node) -> void:
+	# The captured node can be freed before this deferred ready callback runs.
+	if not is_instance_valid(node):
+		return
 	var current_world = Globals.get_current_world()
 	if current_world == null:
 		return
