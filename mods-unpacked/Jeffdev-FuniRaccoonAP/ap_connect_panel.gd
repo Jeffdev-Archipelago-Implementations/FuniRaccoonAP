@@ -158,6 +158,8 @@ func _update_status(state: int = -1, error: int = 0) -> void:
 				var player: String = player_field.text.strip_edges()
 				if player != "":
 					Globals.save_file.set_meta("ap_slot_name", player)
+					Globals.save_file.set_meta("ap_server_host", server_field.text.strip_edges())
+					Globals.save_file.set_meta("ap_seed", ap_client.room_info.get("seed_name", ""))
 					Globals.save_game()
 			_force_open = false
 			status_label.text = "Connected to multiworld!"

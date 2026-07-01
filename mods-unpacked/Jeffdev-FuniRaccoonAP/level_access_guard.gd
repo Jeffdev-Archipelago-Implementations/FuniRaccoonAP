@@ -14,7 +14,6 @@ const CLUSTER_REQUIREMENTS: Dictionary = {
 # Per-level overrides that take precedence over the cluster requirement.
 const LEVEL_REQUIREMENTS: Dictionary = {
 	level_changer.LEVEL_ID.MUSEUM:             15,
-	level_changer.LEVEL_ID.BLIMBO_CITY:        35,
 	level_changer.LEVEL_ID.RBMK:              50,
 }
 
@@ -24,6 +23,8 @@ static func item_requirement_met(level_id: level_changer.LEVEL_ID) -> bool:
 		return (stored.has(item_tracker.item_id.COOLING_ROD)
 			or stored.has(item_tracker.item_id.COOLING_ROD_PLIMBO)
 			or stored.has(item_tracker.item_id.COOLING_ROD_FRIDGE_KING))
+	if level_id == level_changer.LEVEL_ID.INSIDE_BRAZIL_TRAIN:
+		return Globals.save_file.get_meta("ap_brazil_train_ticket", false)
 	return true
 
 static func get_required_for_level(level_id: level_changer.LEVEL_ID) -> int:
@@ -41,6 +42,8 @@ func _get_required(level_id: level_changer.LEVEL_ID) -> int:
 static func _missing_item_text(level_id: level_changer.LEVEL_ID) -> String:
 	if level_id == level_changer.LEVEL_ID.RBMK:
 		return "a Cooling Rod"
+	if level_id == level_changer.LEVEL_ID.INSIDE_BRAZIL_TRAIN:
+		return "the Brazil Train Ticket"
 	return ""
 
 # Builds the "area locked" chat message describing why the level can't be entered yet.

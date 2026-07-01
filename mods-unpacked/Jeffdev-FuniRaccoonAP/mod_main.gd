@@ -9,6 +9,10 @@ var ap_websocket_connection
 var ap_client
 var connect_panel
 
+# Replacement title textures (base game's title_text.png / title_text_no_bg.png).
+var _title_text_tex: Texture2D
+var _title_text_no_bg_tex: Texture2D
+
 func _init() -> void:
 	ModLoaderLog.info("Init", LOG_NAME)
 
@@ -52,8 +56,14 @@ func _ready() -> void:
 	connect_panel.ap_client = ap_client
 	add_child(connect_panel)
 	
+	_title_text_tex = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/images/title_text.png")
+	_title_text_no_bg_tex = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/images/title_text_no_bg.png")
+	if _title_text_tex == null or _title_text_no_bg_tex == null:
+		ModLoaderLog.warning("Title replacement texture(s) failed to load.", LOG_NAME)
+
 	get_tree().node_added.connect(_on_node_added)
 	call_deferred("_scan_existing_save_select")
+	call_deferred("_scan_existing_title")
 
 	LevelChanger.level_Changed.connect(func(level_id: level_changer.LEVEL_ID):
 		ap_client.update_map_location(level_id)
@@ -67,6 +77,8 @@ func _ready() -> void:
 	)
 
 func _on_node_added(node: Node) -> void:
+	_replace_title_on(node)
+
 	if node.name == "Quit" and node.get_script() != null:
 		if node.get_script().resource_path == "res://Scene/Menus/quit_menu.gd":
 			ModLoaderLog.info("Found quit button, connecting pressed signal.", LOG_NAME)
@@ -497,6 +509,33 @@ func _on_node_added(node: Node) -> void:
 
 	# Block Items until they are received
 
+	# Lugh Quests
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/SunGod/sun_god_cliff.gd":
+		node.ready.connect(func():
+			node.player_entered.body_entered.disconnect(node.check_what_is_in_hand)
+			node.player_entered.body_entered.connect(func(body):
+				var lugh_quest_locking: bool = ap_client.slot_data.get("options", {}).get("lugh_quest_locking", false)
+				if lugh_quest_locking and not Globals.save_file.items_stored.has(node.item_id):
+					ModLoaderLog.info("Sun god quest blocked: need %s from AP." % item_tracker.item_id.keys()[node.item_id], LOG_NAME)
+					# Only speak up if the player is actually offering the quest item itself
+					var offering_quest_item: bool = false
+					if body is InteractData:
+						offering_quest_item = (body.obj_id == node.item_id)
+					elif body is PlayerScript:
+						offering_quest_item = body.pickup_pivot.get_objects_in_hand_id().has(node.item_id)
+					if offering_quest_item:
+						DialogueManager.Dialogue_Start(
+							node.sun_gawd_dialogue.profile,
+							node.sun_gawd_dialogue.char_name,
+							"[color=#FF0000]NO!!!!![/color] This item does not contain it's power!! It must be gained from a [rainbow]mysterious Archipelago.....[/rainbow]",
+							node.sun_gawd_dialogue.voice_sound,
+							node.sun_gawd_dialogue.id
+						)
+					return
+				node.check_what_is_in_hand(body)
+			)
+		)
+
 	# Pickaxe
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/pickaxe/pickaxe.gd":
 		node.ready.connect(func():
@@ -536,6 +575,36 @@ func _on_node_added(node: Node) -> void:
 				node.picked_up(player)
 			)
 		)
+
+	# Chicken
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/chicken/chicken.gd":
+		node.ready.connect(func():
+			var chicken_script = node.get_script()
+			node.pick_signal.disconnect(node._on_pick_signal)
+			node.pick_signal.connect(func(player):
+				if not Globals.save_file.items_stored.has(item_tracker.item_id.CHICKEN):
+					ModLoaderLog.info("Chicken float blocked: need CHICKEN item from AP.", LOG_NAME)
+					return
+				chicken_script._on_pick_signal(player)
+			)
+		)
+	
+	# Butterfly
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/cliffs_of_nowher/butterFLY.gd":
+		node.ready.connect(func():
+			var butterfly_script = node.get_script()
+			node.butterfly_mesh.pick_signal.disconnect(node.change_player_gravity)
+			node.butterfly_mesh.pick_signal.connect(func(player):
+				if not Globals.save_file.items_stored.has(item_tracker.item_id.BUTTERFLY):
+					ModLoaderLog.info("Butterfly float blocked: need BUTTERFLY item from AP.", LOG_NAME)
+					return
+				butterfly_script.change_player_gravity(player)
+			)
+		)
+
+	# Brazil train: Gate based on Brazil Train Ticket item, so remove the existing script
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/raccoon_central_station/brazil_deleter.gd":
+		node.set_script(null)
 
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/MainMenu/save_file_select_logic.gd":
 		node.ready.connect(func():
@@ -577,6 +646,33 @@ func _log_cluster_levels(cluster_id) -> void:
 			LOG_NAME
 		)
 	ModLoaderLog.info("=== end cluster %s level list ===" % str(cluster_id), LOG_NAME)
+
+# Swaps any Texture2D property on a node for our replacement if it's a base title image.
+func _replace_title_on(node: Node) -> void:
+	for p in node.get_property_list():
+		if int(p.get("type", TYPE_NIL)) != TYPE_OBJECT:
+			continue
+		var pname: String = p.get("name", "")
+		if pname == "" or pname == "script" or pname == "owner":
+			continue
+		var val = node.get(pname)
+		if not (val is Texture2D):
+			continue
+		# The base title images are embedded CompressedTexture2D sub-resources, so the
+		# source is only visible via load_path (resource_path doesn't carry the filename).
+		var id: String = val.resource_path
+		var lp = val.get("load_path")
+		if lp is String:
+			id += " " + lp
+		# Check no_bg first; "title_text_no_bg" does not contain "title_text.png".
+		if id.contains("title_text_no_bg") and _title_text_no_bg_tex != null:
+			node.set(pname, _title_text_no_bg_tex)
+		elif id.contains("title_text.png") and _title_text_tex != null:
+			node.set(pname, _title_text_tex)
+
+func _scan_existing_title() -> void:
+	for n in get_tree().root.find_children("*", "", true, false):
+		_replace_title_on(n)
 
 func _scan_existing_save_select() -> void:
 	for n in get_tree().root.find_children("*", "", true, false):
@@ -644,12 +740,18 @@ func _show_ap_info(ap_label: RichTextLabel, raccoon_name: String) -> void:
 		ap_label.pop()
 		return
 	var slot_name: String = save_game.get_meta("ap_slot_name")
+	var server_host: String = save_game.get_meta("ap_server_host", "")
 	if logo:
 		ap_label.add_image(logo, 24, 24)
 		ap_label.add_text(" ")
 	ap_label.push_color(Color(1, 1, 0, 1))
 	ap_label.add_text("%s" % slot_name)
 	ap_label.pop()
+	if server_host != "":
+		ap_label.add_text("\n")
+		ap_label.push_color(Color(0.7, 0.7, 0.7, 1))
+		ap_label.add_text(server_host)
+		ap_label.pop()
 
 func _on_quit_pressed() -> void:
 	ModLoaderLog.info("Quit pressed, disconnecting from AP.", LOG_NAME)

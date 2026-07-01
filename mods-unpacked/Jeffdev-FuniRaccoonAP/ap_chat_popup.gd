@@ -10,6 +10,7 @@ const TOGGLE_KEY = KEY_F6
 const GOAL_KEY = KEY_F2
 const POPUP_TOGGLE_KEY = KEY_F3
 const FILTER_KEY = KEY_F4
+const DEATHLINK_TOGGLE_KEY = KEY_F5
 
 static var _manager: CanvasLayer = null
 static var _vbox: VBoxContainer = null
@@ -44,6 +45,12 @@ func _input(event: InputEvent) -> void:
 			popup_script._enabled = not popup_script._enabled
 			var state := "Enabled" if popup_script._enabled else "Disabled"
 			show_message("[color=#FAFAD2]Item Popups: %s[/color]" % state, get_tree().get_root())
+		elif event.keycode == DEATHLINK_TOGGLE_KEY:
+			if not is_instance_valid(_ap_client):
+				return
+			_ap_client.toggle_deathlink()
+			var dl_state := "Enabled" if _ap_client.is_deathlink_enabled() else "Disabled"
+			show_message("[color=#FAFAD2]DeathLink: %s[/color]" % dl_state, get_tree().get_root())
 		elif event.keycode == FILTER_KEY:
 			_relevant_only = not _relevant_only
 			# Re-apply visibility to messages already on screen.
@@ -60,49 +67,52 @@ func _input(event: InputEvent) -> void:
 			if Globals.save_file.get_meta("ap_goal_complete", false):
 				show_message("[color=#00FF7F]GOAL COMPLETE![/color]", get_tree().get_root())
 				return
-			var goal_raw = _ap_client.slot_data.get("goal", -1)
-			var goal: String = _ap_client.GOAL_ID_TO_NAME.get(int(goal_raw), "unknown")
+			var required_goals: Array = _ap_client.get_required_goals()
+			if required_goals.is_empty():
+				show_message("[color=#FAFAD2]No goals configured.[/color]", get_tree().get_root())
+				return
 			var stored: Array = Globals.save_file.items_stored
 			var count: int = stored.size()
 			var chk := func(label: String, item_id) -> String:
 				var has_it: bool = stored.has(item_id)
 				return "[color=%s]%s %s[/color]" % ["#00FF7F" if has_it else "#EE0000", "✓" if has_it else "✗", label]
-			var msg: String
-			match goal:
-				"orb":
-					msg = "[color=#FAFAD2]Goal: Orb[/color] - %d/50 items\n" % count
-					msg += chk.call("Orb", item_tracker.item_id.ORB) + "\n"
-					msg += chk.call("Cooling Rod", item_tracker.item_id.COOLING_ROD) + "\n"
-					msg += chk.call("Cooling Rod (Plimbo)", item_tracker.item_id.COOLING_ROD_PLIMBO) + "\n"
-					msg += chk.call("Cooling Rod (Fridge King)", item_tracker.item_id.COOLING_ROD_FRIDGE_KING) + "\n"
-					msg += chk.call("Kei Truck", item_tracker.item_id.KEI_TRUCK)
-				"museum":
-					msg = "[color=#FAFAD2]Goal: Museum[/color] - %d/100 items\n" % count
-					msg += chk.call("Waffle", item_tracker.item_id.WAFFLE) + "\n"
-					msg += chk.call("Cooling Rod", item_tracker.item_id.COOLING_ROD) + "\n"
-					msg += chk.call("Cooling Rod (Plimbo)", item_tracker.item_id.COOLING_ROD_PLIMBO) + "\n"
-					msg += chk.call("Cooling Rod (Fridge King)", item_tracker.item_id.COOLING_ROD_FRIDGE_KING) + "\n"
-					msg += chk.call("Kei Truck", item_tracker.item_id.KEI_TRUCK)
-				"fellowship":
-					msg = "[color=#FAFAD2]Goal: Fellowship[/color] - %d/50 items\n" % count
-					msg += chk.call("Priestess", item_tracker.item_id.PRIESTESS) + "\n"
-					msg += chk.call("Greenie", item_tracker.item_id.GREENIE) + "\n"
-					msg += chk.call("Cooling Rod", item_tracker.item_id.COOLING_ROD) + "\n"
-					msg += chk.call("Cooling Rod (Plimbo)", item_tracker.item_id.COOLING_ROD_PLIMBO) + "\n"
-					msg += chk.call("Cooling Rod (Fridge King)", item_tracker.item_id.COOLING_ROD_FRIDGE_KING)
-				"lugh":
-					var received_jewels: Array = Globals.save_file.get_meta("ap_received_jewels", [])
-					var chk_jewel := func(label: String, ap_item_id: int) -> String:
-						var has_it: bool = received_jewels.has(ap_item_id)
-						return "[color=%s]%s %s[/color]" % ["#00FF7F" if has_it else "#EE0000", "✓" if has_it else "✗", label]
-					msg = "[color=#FAFAD2]Goal: Lugh[/color] - %d/50 items\n" % count
-					msg += chk.call("Kei Truck", item_tracker.item_id.KEI_TRUCK) + "\n"
-					msg += chk_jewel.call("Mystical Gem (Green)", 601) + "\n"
-					msg += chk_jewel.call("Mystical Gem (Blue)", 602) + "\n"
-					msg += chk_jewel.call("Mystical Gem (Purple)", 603) + "\n"
-					msg += chk_jewel.call("Mystical Gem (Red)", 604)
-				_:
-					msg = "[color=#FAFAD2]Goal: %s[/color]" % goal
+			var received_jewels: Array = Globals.save_file.get_meta("ap_received_jewels", [])
+			var chk_jewel := func(label: String, ap_item_id: int) -> String:
+				var has_it: bool = received_jewels.has(ap_item_id)
+				return "[color=%s]%s %s[/color]" % ["#00FF7F" if has_it else "#EE0000", "✓" if has_it else "✗", label]
+			var msg := "[color=#FAFAD2]Goals (all required to win)[/color]\n"
+			for goal in required_goals:
+				var done: bool = _ap_client.is_goal_completed(goal)
+				var header_color := "#00FF7F" if done else "#FAFAD2"
+				var done_mark := " [DONE]" if done else ""
+				match goal:
+					"orb":
+						msg += "\n[color=%s]Orb%s[/color] - %d/50 items\n" % [header_color, done_mark, count]
+						msg += chk.call("Orb", item_tracker.item_id.ORB) + "\n"
+						msg += chk.call("Cooling Rod", item_tracker.item_id.COOLING_ROD) + "\n"
+						msg += chk.call("Cooling Rod (Plimbo)", item_tracker.item_id.COOLING_ROD_PLIMBO) + "\n"
+						msg += chk.call("Cooling Rod (Fridge King)", item_tracker.item_id.COOLING_ROD_FRIDGE_KING)
+					"museum":
+						msg += "\n[color=%s]Museum%s[/color] - %d/100 items\n" % [header_color, done_mark, count]
+						msg += chk.call("Waffle", item_tracker.item_id.WAFFLE) + "\n"
+						msg += chk.call("Cooling Rod", item_tracker.item_id.COOLING_ROD) + "\n"
+						msg += chk.call("Cooling Rod (Plimbo)", item_tracker.item_id.COOLING_ROD_PLIMBO) + "\n"
+						msg += chk.call("Cooling Rod (Fridge King)", item_tracker.item_id.COOLING_ROD_FRIDGE_KING)
+					"fellowship":
+						msg += "\n[color=%s]Fellowship%s[/color] - %d/50 items\n" % [header_color, done_mark, count]
+						msg += chk.call("Priestess", item_tracker.item_id.PRIESTESS) + "\n"
+						msg += chk.call("Greenie", item_tracker.item_id.GREENIE) + "\n"
+						msg += chk.call("Cooling Rod", item_tracker.item_id.COOLING_ROD) + "\n"
+						msg += chk.call("Cooling Rod (Plimbo)", item_tracker.item_id.COOLING_ROD_PLIMBO) + "\n"
+						msg += chk.call("Cooling Rod (Fridge King)", item_tracker.item_id.COOLING_ROD_FRIDGE_KING)
+					"lugh":
+						msg += "\n[color=%s]Lugh%s[/color] - %d/50 items\n" % [header_color, done_mark, count]
+						msg += chk_jewel.call("Mystical Gem (Green)", 601) + "\n"
+						msg += chk_jewel.call("Mystical Gem (Blue)", 602) + "\n"
+						msg += chk_jewel.call("Mystical Gem (Purple)", 603) + "\n"
+						msg += chk_jewel.call("Mystical Gem (Red)", 604)
+					_:
+						msg += "\n[color=%s]%s%s[/color]" % [header_color, str(goal), done_mark]
 			show_message(msg, get_tree().get_root())
 
 
@@ -146,8 +156,8 @@ static func _create_manager(root: Node) -> void:
 	_vbox.add_theme_constant_override("separation", 3)
 	_vbox.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	_vbox.offset_left = 20.0
-	_vbox.offset_right = 395.0  # 375px wide
-	_vbox.offset_top = -295.0
+	_vbox.offset_right = 320.0  # 300px wide
+	_vbox.offset_top = -235.0
 	_vbox.offset_bottom = -20.0
 
 	_manager.add_child(_vbox)
@@ -158,14 +168,14 @@ static func _add_label(bbcode_text: String, relevant := true) -> void:
 	label.set_meta("ap_relevant", relevant)
 	label.bbcode_enabled = true
 	label.fit_content = true
-	label.custom_minimum_size = Vector2(280, 0)
+	label.custom_minimum_size = Vector2(230, 0)
 	label.add_theme_font_override("normal_font", load("res://Fonts/youngserif-regular.ttf"))
 	label.add_theme_color_override("default_color", Color(1, 1, 1, 1))
 	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
 	label.add_theme_constant_override("shadow_offset_x", 1.4)
 	label.add_theme_constant_override("shadow_offset_y", 1.4)
 	label.add_theme_constant_override("shadow_outline_size", 1)
-	label.text = "[font_size=14]%s[/font_size]" % bbcode_text
+	label.text = "[font_size=12]%s[/font_size]" % bbcode_text
 	label.modulate.a = 0.0
 	label.visible = _chat_visible
 
