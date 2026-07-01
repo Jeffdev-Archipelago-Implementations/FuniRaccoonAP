@@ -691,6 +691,8 @@ func _on_connection_state_changed(new_state: int, _error: int = 0) -> void:
 	elif new_state == ConnectState.DISCONNECTED:
 		var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
 		popup_script.clear_all()
+		var item_popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_item_popup.gd")
+		item_popup_script.clear_all()
 		popup_script.show_message("[color=#EE0000]Disconnected from Archipelago[/color]", get_tree().get_root())
 		Globals.QUIT_TO_MEUN()
 

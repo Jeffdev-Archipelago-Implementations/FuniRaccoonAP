@@ -6,6 +6,7 @@ var _sender_name: String = ""
 static var _queue: Array = []
 static var _showing: bool = false
 static var _enabled: bool = true
+static var _current_popup: CanvasLayer = null
 
 static func show_popup(item_name: String, sender_name: String, root: Node) -> void:
 	if not _enabled:
@@ -17,6 +18,7 @@ static func show_popup(item_name: String, sender_name: String, root: Node) -> vo
 static func _show_next() -> void:
 	if _queue.is_empty():
 		_showing = false
+		_current_popup = null
 		return
 	_showing = true
 	var next: Dictionary = _queue.pop_front()
@@ -28,7 +30,19 @@ static func _show_next() -> void:
 	popup._item_name = next["item_name"]
 	popup._sender_name = next["sender_name"]
 	popup.tree_exited.connect(_show_next)
+	_current_popup = popup
 	root.add_child(popup)
+
+## Drops any queued item popups and immediately removes whichever one is on screen, so nothing
+## from a previous connection lingers or shows up after disconnecting from Archipelago.
+static func clear_all() -> void:
+	_queue.clear()
+	_showing = false
+	if is_instance_valid(_current_popup):
+		if _current_popup.tree_exited.is_connected(_show_next):
+			_current_popup.tree_exited.disconnect(_show_next)
+		_current_popup.queue_free()
+	_current_popup = null
 
 func _ready() -> void:
 	layer = 10
