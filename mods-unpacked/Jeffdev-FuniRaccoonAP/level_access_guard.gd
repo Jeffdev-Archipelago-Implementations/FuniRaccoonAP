@@ -13,8 +13,8 @@ const CLUSTER_REQUIREMENTS: Dictionary = {
 
 # Per-level overrides that take precedence over the cluster requirement.
 const LEVEL_REQUIREMENTS: Dictionary = {
-	level_changer.LEVEL_ID.MUSEUM:             15,
-	level_changer.LEVEL_ID.RBMK:              50,
+	level_changer.LEVEL_ID.MUSEUM:  15,
+	level_changer.LEVEL_ID.RBMK:   	50,
 }
 
 static func item_requirement_met(level_id: level_changer.LEVEL_ID) -> bool:
@@ -27,7 +27,19 @@ static func item_requirement_met(level_id: level_changer.LEVEL_ID) -> bool:
 		return Globals.save_file.get_meta("ap_brazil_train_ticket", false)
 	return true
 
+# Set by mod_main so the static requirement lookups can remap the vanilla values below
+# to this slot's configured thresholds.
+static var _client = null
+static func set_client(c) -> void:
+	_client = c
+
 static func get_required_for_level(level_id: level_changer.LEVEL_ID) -> int:
+	var required: int = _raw_required_for_level(level_id)
+	if is_instance_valid(_client) and _client.has_method("slot_threshold_for"):
+		return _client.slot_threshold_for(required)
+	return required
+
+static func _raw_required_for_level(level_id: level_changer.LEVEL_ID) -> int:
 	if LEVEL_REQUIREMENTS.has(level_id):
 		return LEVEL_REQUIREMENTS[level_id]
 	if not LevelChanger.all_levels.has(level_id):

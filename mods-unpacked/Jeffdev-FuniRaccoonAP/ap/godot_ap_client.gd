@@ -31,7 +31,9 @@ enum ConnectResult {
 	AP_INVALID_ITEMS_HANDLING = 9,
 	# Fallback in case a new error is added that we don't support yet
 	AP_CONNECTION_REFUSED_UNKNOWN_REASON = 10,
-	ALREADY_CONNECTED = 11
+	ALREADY_CONNECTED = 11,
+	# The room's seed doesn't match the seed this save file was started on (see _validate_room_info).
+	SEED_MISMATCH = 12
 }
 
 const _CACHE_DIR = "user://ap_datapackage_cache"
@@ -144,6 +146,7 @@ signal data_storage_updated(key, new_value, original_value)
 signal room_updated(updated_room_info)
 ## Emitted when a `Bounced` packet is received. Contains the packet's data.
 signal bounced_received(bounced_data)
+signal location_info_received(location_id, item_id, item_name, game_name)
 
 func _init(websocket_client_, config_):
 	websocket_client = websocket_client_
@@ -159,6 +162,7 @@ func _ready():
 	websocket_client.on_retrieved.connect(_on_retrieved)
 	websocket_client.on_room_update.connect(_on_room_update)
 	websocket_client.on_bounced.connect(_on_bounced_received)
+	websocket_client.on_location_info.connect(_on_location_info)
 
 func _connected_or_connection_refused_received(message: Dictionary):
 	_received_connect_response.emit(message)
@@ -189,6 +193,14 @@ func connect_to_multiworld(get_data_package: bool = true) -> int:
 			connect_state = ConnectState.CONNECTED_TO_SERVER
 
 		room_info = await websocket_client.on_room_info
+
+		# Give subclasses a chance to reject the room before we send Connect (e.g. the
+		# Funi client refuses rooms whose seed doesn't match the one stored on the save).
+		var room_validation: int = _validate_room_info(room_info)
+		if room_validation != ConnectResult.SUCCESS:
+			websocket_client.disconnect_from_server()
+			_set_connection_state(ConnectState.DISCONNECTED, room_validation)
+			return room_validation
 
 		if get_data_package:
 			data_package = ApDataPackage.new({}, self.game)
@@ -258,7 +270,10 @@ func connect_to_multiworld(get_data_package: bool = true) -> int:
 				ap_error = ConnectResult.AP_INVALID_ITEMS_HANDLING
 			_:
 				ap_error = ConnectResult.AP_CONNECTION_REFUSED_UNKNOWN_REASON
-		self._set_connection_state(self.connect_state, ap_error)
+		# Tear the socket down and reset to DISCONNECTED so a retry starts a clean
+		# connection instead of reusing this half-open one.
+		websocket_client.disconnect_from_server()
+		self._set_connection_state(ConnectState.DISCONNECTED, ap_error)
 		return ap_error
 
 	self.team = connect_response["team"]
@@ -309,6 +324,11 @@ func disconnect_from_multiworld():
 	_set_connection_state(ConnectState.DISCONNECTED)
 	self.player_tags = []
 
+## Called after RoomInfo is received but before Connect is sent, so game-specific subclasses
+## can refuse the room (return a ConnectResult error) before joining. Default accepts anything.
+func _validate_room_info(_room_info_to_validate: Dictionary) -> int:
+	return ConnectResult.SUCCESS
+
 func _cache_path(game_name: String) -> String:
 	# Replace characters that are invalid in filenames.
 	var safe_name = game_name.replace("/", "_").replace("\\", "_").replace(":", "_")
@@ -351,6 +371,10 @@ func set_status(status: int):
 func check_location(location_id: int):
 	## Send a `LocationChecks` packet with the provided location ID(s).
 	websocket_client.send_location_checks([location_id])
+
+func send_location_scouts(locations: Array, create_as_hint: int = 0) -> void:
+	## Send a `LocationScouts` packet to the server to retrieve the item at one or more locations.
+	websocket_client.send_location_scouts(locations, create_as_hint)
 
 func get_value(keys: Array):
 	## Send a `Get` packet to query the server's data storage.
@@ -434,3 +458,31 @@ func _on_set_reply(command):
 
 func _on_bounced_received(bounced_data: Dictionary):
 	bounced_received.emit(bounced_data)
+
+func _resolve_player_name(player_slot: int) -> String:
+	if player_slot < 0 or players == null:
+		return ""
+	for p in players:
+		if int(p.get("slot", -1)) == player_slot:
+			return str(p.get("alias", p.get("name", "Unknown")))
+	return ""
+
+func _on_location_info(command: Dictionary):
+	if not command.has("locations"):
+		return
+	for location_info in command["locations"]:
+		var location_id = location_info.get("location", location_info.get("location_id", 0))
+		var item_id = location_info.get("item", location_info.get("item_id", 0))
+		var game_name = location_info.get("game", game)
+		var item_name = ""
+		if item_id != 0 and data_package:
+			item_name = data_package.resolve_item(int(item_id), str(game_name))
+		if item_name == "":
+			item_name = str(item_id)
+		var player_slot = int(location_info.get("player", location_info.get("receiving_player", location_info.get("slot", -1))))
+		var player_name = ""
+		if player_slot >= 0:
+			player_name = _resolve_player_name(player_slot)
+		if player_name == "" and location_info.has("player_name"):
+			player_name = str(location_info["player_name"])
+		location_info_received.emit(location_id, item_id, item_name, game_name, player_slot, player_name)

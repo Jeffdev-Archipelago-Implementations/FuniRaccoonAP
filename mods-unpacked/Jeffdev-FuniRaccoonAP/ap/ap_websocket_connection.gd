@@ -86,6 +86,10 @@ func connect_to_server(server: String) -> bool:
 	if wss_success or ws_success:
 		_set_connection_state(State.OPEN)
 		ModLoaderLog.info("Connected to multiworld %s." % _url, LOG_NAME)
+	else:
+		# Both attempts failed; reset to CLOSED so a retry connects cleanly instead of
+		# staying stuck in CONNECTING.
+		_set_connection_state(State.CLOSED)
 
 	return wss_success or ws_success
 
@@ -132,11 +136,11 @@ func send_location_checks(locations: Array):
 	)
 
 # TODO: create_as_hint Enum
-func send_location_scouts(locations: Array, create_as_int: int):
+func send_location_scouts(locations: Array, create_as_hint: int):
 	_send_command({
 		"cmd": "LocationScouts",
 		"locations": locations,
-		"create_as_int": create_as_int
+		"create_as_hint": create_as_hint
 	})
 
 func status_update(status: int):

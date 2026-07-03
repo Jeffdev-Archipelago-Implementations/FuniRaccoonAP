@@ -1,13 +1,14 @@
 extends Node
 
 const MOD_NAME = "Jeffdev-FuniRaccoonAP"
-const MOD_VERSION = "1.5.6"
+const MOD_VERSION = "1.6.0"
 const LOG_NAME = MOD_NAME + "/mod_main"
 const CONFIG_PATH = "user://ap_connect.json"
 
 var ap_websocket_connection
 var ap_client
 var connect_panel
+var _color_randomized_this_transition: bool = false
 
 # Replacement title textures (base game's title_text.png / title_text_no_bg.png).
 var _title_text_tex: Texture2D
@@ -50,6 +51,7 @@ func _ready() -> void:
 	ModLoaderLog.success("AP client ready v%s" % MOD_VERSION, LOG_NAME)
 	var ApChatPopupScript = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
 	ApChatPopupScript.set_ap_client(ap_client)
+	load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/level_access_guard.gd").set_client(ap_client)
 		
 	var ApConnectPanelScript = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_connect_panel.tscn")
 	connect_panel = ApConnectPanelScript.instantiate()
@@ -65,8 +67,17 @@ func _ready() -> void:
 	call_deferred("_scan_existing_save_select")
 	call_deferred("_scan_existing_title")
 
+	LevelChanger.changing_level.connect(func():
+		_color_randomized_this_transition = false
+	)
+
 	LevelChanger.level_Changed.connect(func(level_id: level_changer.LEVEL_ID):
+		ap_client.clear_police_warning()
 		ap_client.update_map_location(level_id)
+		if ap_client.slot_data.get("options", {}).get("color_rando", false):
+			if not _color_randomized_this_transition and Globals.player_inst != null and Globals.player_inst.player != null:
+				Globals.player_inst.player.set_colour(Color(randf(), randf(), randf(), 1))
+				_color_randomized_this_transition = true
 		match level_id:
 			level_changer.LEVEL_ID.ORB_ENDING:
 				ap_client.check_goal("orb")
@@ -78,6 +89,21 @@ func _ready() -> void:
 
 func _on_node_added(node: Node) -> void:
 	_replace_title_on(node)
+
+	# Hub dumpster gates/displays hardcode vanilla thresholds (15/25/35/50) per instance.
+	# Remap them to this slot's thresholds. Runs before their _ready reads the value.
+	if node.get_script() != null:
+		match node.get_script().resource_path:
+			"res://Scene/Levels/hub_world/floors/number_reached.gd":
+				node.stored_size = ap_client.slot_threshold_for(node.stored_size)
+			"res://Scene/Levels/hub_world/item_meter.gd":
+				node.item_count_max = ap_client.slot_threshold_for(node.item_count_max)
+			"res://Scene/Levels/hub_world/portal_connection.gd":
+				node.item_count_needed = ap_client.slot_threshold_for(node.item_count_needed)
+			"res://Scene/Levels/hub_world/state_handler.gd":
+				if ap_client.connect_state == ap_client.ConnectState.CONNECTED_TO_MULTIWORLD:
+					node.second_floor_threshold = ap_client.slot_threshold_for(25)
+					node.third_floor_threshold = ap_client.slot_threshold_for(35)
 
 	if node.name == "Quit" and node.get_script() != null:
 		if node.get_script().resource_path == "res://Scene/Menus/quit_menu.gd":
@@ -216,6 +242,24 @@ func _on_node_added(node: Node) -> void:
 			)
 		)
 
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Player Stuff/ui/object_icon_meta.gd":
+		if ap_client.connect_state == ap_client.ConnectState.CONNECTED_TO_MULTIWORLD:
+			var blackout_items: Array = [
+				item_tracker.item_id.CHICKEN, 
+				item_tracker.item_id.BROB_ENERGY,
+				item_tracker.item_id.KEI_TRUCK,
+				item_tracker.item_id.GOO,
+				item_tracker.item_id.PICKAXE,
+				item_tracker.item_id.BUTTERFLY,
+				item_tracker.item_id.ORB,
+				item_tracker.item_id.PRIESTESS,
+				item_tracker.item_id.GREENIE,
+				item_tracker.item_id.MINES_KEY,
+				item_tracker.item_id.FRIDGE_KEY]
+			var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
+			if ap_client.ITEM_ID_TO_AP_LOCATION.has(node.icon_id) and not ap_stored.has(node.icon_id) and blackout_items.has(node.icon_id):
+				node.modulate = Color.BLACK
+
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Dumpster/Dumpster.gd":
 		node.ready.connect(func():
 			node.object_area_detect.body_entered.disconnect(node._on_object_area_detect_body_entered)
@@ -282,9 +326,38 @@ func _on_node_added(node: Node) -> void:
 		var path: String = node.get_script().resource_path
 		if path == "res://Models/siopa_riz/siopa_riz_ui.gd":
 			node.ready.connect(func():
+				var shop_upgrade_labels = {
+					4001: node.radio_sign,
+					4002: node.boost_sign,
+					4003: node.jump_sign,
+				}
+				for sign in shop_upgrade_labels.values():
+					if sign.title_rect and sign.title_rect.get_child_count() > 0:
+						var title_label = sign.title_rect.get_child(0)
+						if title_label.has_method("add_theme_font_size_override"):
+							title_label.add_theme_font_size_override("normal_font_size", 14)
+						if title_label.has_method("set_bbcode_enabled"):
+							title_label.set_bbcode_enabled(true)
+						if title_label.has_method("set_autowrap"):
+							title_label.set_autowrap(true)
+						title_label.fit_content = false
+				ap_client.location_info_received.connect(func(location_id: int, item_id: int, item_name: String, game_name: String, player_slot: int, player_name: String) -> void:
+					var sign = shop_upgrade_labels.get(location_id, null)
+					if sign != null and is_instance_valid(sign):
+						var label_text = item_name
+						if player_name != "":
+							label_text = "%s\nfor %s" % [item_name, player_name]
+						sign.title_rect.get_child(0).text = label_text
+				)
 				node.animation_player.animation_finished.connect(func(anim_name: String):
 					if anim_name != "enter_shop" or not node.shop_showing:
 						return
+					var shop_hint_sent: bool = Globals.save_file.get_meta("ap_shop_upgrade_hint_sent", false)
+					if not shop_hint_sent:
+						ap_client.send_location_scouts([4001, 4002, 4003], 1)
+						Globals.save_file.set_meta("ap_shop_upgrade_hint_sent", true)
+					else:
+						ap_client.send_location_scouts([4001, 4002, 4003], 0)
 					var shop_items = [
 						[node.radio_sign, truck_flags.radio_purchased],
 						[node.boost_sign, truck_flags.boost_purchased],
@@ -527,7 +600,7 @@ func _on_node_added(node: Node) -> void:
 						DialogueManager.Dialogue_Start(
 							node.sun_gawd_dialogue.profile,
 							node.sun_gawd_dialogue.char_name,
-							"[color=#FF0000]NO!!!!![/color] This item does not contain it's power!! It must be gained from a [rainbow]mysterious Archipelago.....[/rainbow]",
+							"[color=#FF0000]NO!!!!![/color] This item does not contain any power!! Its power must be found in a [rainbow][wave]mysterious Archipelago location.....[/wave][/rainbow]",
 							node.sun_gawd_dialogue.voice_sound,
 							node.sun_gawd_dialogue.id
 						)
@@ -577,28 +650,27 @@ func _on_node_added(node: Node) -> void:
 		)
 
 	# Chicken
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/chicken/chicken.gd":
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/chicken/chicken_logic.gd":
 		node.ready.connect(func():
-			var chicken_script = node.get_script()
-			node.pick_signal.disconnect(node._on_pick_signal)
-			node.pick_signal.connect(func(player):
+			var chicken = node.get_parent()
+			chicken.pick_signal.disconnect(node._on_chicken_pick_signal)
+			chicken.pick_signal.connect(func(player):
 				if not Globals.save_file.items_stored.has(item_tracker.item_id.CHICKEN):
 					ModLoaderLog.info("Chicken float blocked: need CHICKEN item from AP.", LOG_NAME)
 					return
-				chicken_script._on_pick_signal(player)
+				node._on_chicken_pick_signal(player)
 			)
 		)
-	
+
 	# Butterfly
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/cliffs_of_nowher/butterFLY.gd":
 		node.ready.connect(func():
-			var butterfly_script = node.get_script()
 			node.butterfly_mesh.pick_signal.disconnect(node.change_player_gravity)
 			node.butterfly_mesh.pick_signal.connect(func(player):
 				if not Globals.save_file.items_stored.has(item_tracker.item_id.BUTTERFLY):
 					ModLoaderLog.info("Butterfly float blocked: need BUTTERFLY item from AP.", LOG_NAME)
 					return
-				butterfly_script.change_player_gravity(player)
+				node.change_player_gravity(player)
 			)
 		)
 

@@ -143,12 +143,35 @@ func _on_connection_state_changed(state: int, error: int = 0) -> void:
 	_update_status(state, error)
 	connect_button.disabled = (state == ap_client.ConnectState.CONNECTING)
 
+func _friendly_error(error: int) -> String:
+	var reason: String
+	match error:
+		ap_client.ConnectResult.SERVER_CONNECT_FAILURE:
+			reason = "Could not reach the server."
+		ap_client.ConnectResult.INVALID_SERVER:
+			reason = "Invalid server address."
+		ap_client.ConnectResult.PLAYER_NOT_SET:
+			reason = "Player name is required."
+		ap_client.ConnectResult.AP_INVALID_SLOT:
+			reason = "Unknown player/slot name for this room."
+		ap_client.ConnectResult.AP_INVALID_GAME:
+			reason = "That slot isn't playing Funi Raccoon Game."
+		ap_client.ConnectResult.AP_INCOMPATIBLE_VERSION:
+			reason = "Server version is incompatible."
+		ap_client.ConnectResult.AP_INVALID_PASSWORD:
+			reason = "Incorrect password."
+		ap_client.ConnectResult.SEED_MISMATCH:
+			reason = "This save was started on a different seed."
+		_:
+			reason = "Connection refused by the server."
+	return "%s" % reason
+
 func _update_status(state: int = -1, error: int = 0) -> void:
 	if state == -1:
 		state = ap_client.connect_state
 	match state:
 		ap_client.ConnectState.DISCONNECTED:
-			status_label.text = "Disconnected" if error == 0 else "Error: %s" % ap_client.ConnectResult.keys()[error]
+			status_label.text = "Disconnected" if error == 0 else _friendly_error(error)
 		ap_client.ConnectState.CONNECTING:
 			status_label.text = "Connecting..."
 		ap_client.ConnectState.CONNECTED_TO_SERVER:
@@ -170,3 +193,5 @@ func _update_status(state: int = -1, error: int = 0) -> void:
 			get_tree().paused = false
 		ap_client.ConnectState.DISCONNECTING:
 			status_label.text = "Disconnecting..."
+		ap_client.ConnectState.SEED_MISMATCH:
+			status_label.text = "Error: Seed mismatch. This save file was started on a different seed."

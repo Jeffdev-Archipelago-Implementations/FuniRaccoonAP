@@ -6,12 +6,17 @@ extends CanvasLayer
 
 const MAX_MESSAGES = 4
 const MESSAGE_DURATION = 7.5
+const HELP_KEY = KEY_F1
 const TOGGLE_KEY = KEY_F6
 const GOAL_KEY = KEY_F2
 const POPUP_TOGGLE_KEY = KEY_F3
 const FILTER_KEY = KEY_F4
-const DEATHLINK_TOGGLE_KEY = KEY_F5
 
+const HELP_MESSAGE = "Controls: [color=#FAFAD2]F1[/color]: Help | [color=#FAFAD2]F2[/color]: Goal | [color=#FAFAD2]F3[/color]: Toggle Popups | [color=#FAFAD2]F4[/color]: Filter Messages | [color=#FAFAD2]F6[/color]: Toggle Messages"
+
+const META_CHAT_VISIBLE = "ap_chat_visible"
+const META_CHAT_RELEVANT_ONLY = "ap_chat_relevant_only"
+const META_ITEM_POPUPS_ENABLED = "ap_item_popups_enabled"
 static var _manager: CanvasLayer = null
 static var _vbox: VBoxContainer = null
 static var _messages: Array = []  # Active RichTextLabel nodes
@@ -25,8 +30,12 @@ static func set_ap_client(client) -> void:
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == TOGGLE_KEY:
+		if event.keycode == HELP_KEY:
+			show_message(HELP_MESSAGE, get_tree().get_root())
+		elif event.keycode == TOGGLE_KEY:
 			_chat_visible = not _chat_visible
+			Globals.save_file.set_meta(META_CHAT_VISIBLE, _chat_visible)
+			Globals.save_game()
 			var notice := "Showing AP Messages" if _chat_visible else "Hiding AP Messages"
 			_vbox.visible = true
 			_hiding = false
@@ -43,16 +52,16 @@ func _input(event: InputEvent) -> void:
 		elif event.keycode == POPUP_TOGGLE_KEY:
 			var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_item_popup.gd")
 			popup_script._enabled = not popup_script._enabled
+			Globals.save_file.set_meta(META_ITEM_POPUPS_ENABLED, popup_script._enabled)
+			Globals.save_game()
 			var state := "Enabled" if popup_script._enabled else "Disabled"
+			if not popup_script._enabled:
+				popup_script.clear_all()
 			show_message("[color=#FAFAD2]Item Popups: %s[/color]" % state, get_tree().get_root())
-		elif event.keycode == DEATHLINK_TOGGLE_KEY:
-			if not is_instance_valid(_ap_client):
-				return
-			_ap_client.toggle_deathlink()
-			var dl_state := "Enabled" if _ap_client.is_deathlink_enabled() else "Disabled"
-			show_message("[color=#FAFAD2]DeathLink: %s[/color]" % dl_state, get_tree().get_root())
 		elif event.keycode == FILTER_KEY:
 			_relevant_only = not _relevant_only
+			Globals.save_file.set_meta(META_CHAT_RELEVANT_ONLY, _relevant_only)
+			Globals.save_game()
 			# Re-apply visibility to messages already on screen.
 			for m in _messages:
 				if is_instance_valid(m):
@@ -73,6 +82,7 @@ func _input(event: InputEvent) -> void:
 				return
 			var stored: Array = Globals.save_file.items_stored
 			var count: int = stored.size()
+			var goal_threshold: int = _ap_client.slot_threshold_for(50)
 			var chk := func(label: String, item_id) -> String:
 				var has_it: bool = stored.has(item_id)
 				return "[color=%s]%s %s[/color]" % ["#00FF7F" if has_it else "#EE0000", "✓" if has_it else "✗", label]
@@ -87,7 +97,7 @@ func _input(event: InputEvent) -> void:
 				var done_mark := " [DONE]" if done else ""
 				match goal:
 					"orb":
-						msg += "\n[color=%s]Orb%s[/color] - %d/50 items\n" % [header_color, done_mark, count]
+						msg += "\n[color=%s]Orb%s[/color] - %d/%d items\n" % [header_color, done_mark, count, goal_threshold]
 						msg += chk.call("Orb", item_tracker.item_id.ORB) + "\n"
 						msg += chk.call("Cooling Rod", item_tracker.item_id.COOLING_ROD) + "\n"
 						msg += chk.call("Cooling Rod (Plimbo)", item_tracker.item_id.COOLING_ROD_PLIMBO) + "\n"
@@ -99,14 +109,14 @@ func _input(event: InputEvent) -> void:
 						msg += chk.call("Cooling Rod (Plimbo)", item_tracker.item_id.COOLING_ROD_PLIMBO) + "\n"
 						msg += chk.call("Cooling Rod (Fridge King)", item_tracker.item_id.COOLING_ROD_FRIDGE_KING)
 					"fellowship":
-						msg += "\n[color=%s]Fellowship%s[/color] - %d/50 items\n" % [header_color, done_mark, count]
+						msg += "\n[color=%s]Fellowship%s[/color] - %d/%d items\n" % [header_color, done_mark, count, goal_threshold]
 						msg += chk.call("Priestess", item_tracker.item_id.PRIESTESS) + "\n"
 						msg += chk.call("Greenie", item_tracker.item_id.GREENIE) + "\n"
 						msg += chk.call("Cooling Rod", item_tracker.item_id.COOLING_ROD) + "\n"
 						msg += chk.call("Cooling Rod (Plimbo)", item_tracker.item_id.COOLING_ROD_PLIMBO) + "\n"
 						msg += chk.call("Cooling Rod (Fridge King)", item_tracker.item_id.COOLING_ROD_FRIDGE_KING)
 					"lugh":
-						msg += "\n[color=%s]Lugh%s[/color] - %d/50 items\n" % [header_color, done_mark, count]
+						msg += "\n[color=%s]Lugh%s[/color] - %d/%d items\n" % [header_color, done_mark, count, goal_threshold]
 						msg += chk_jewel.call("Mystical Gem (Green)", 601) + "\n"
 						msg += chk_jewel.call("Mystical Gem (Blue)", 602) + "\n"
 						msg += chk_jewel.call("Mystical Gem (Purple)", 603) + "\n"
@@ -162,6 +172,13 @@ static func _create_manager(root: Node) -> void:
 
 	_manager.add_child(_vbox)
 	root.add_child(_manager)
+
+	# Load persisted function-key toggles from save meta and apply.
+	_chat_visible = Globals.save_file.get_meta(META_CHAT_VISIBLE, _chat_visible)
+	_relevant_only = Globals.save_file.get_meta(META_CHAT_RELEVANT_ONLY, _relevant_only)
+	_vbox.visible = _chat_visible
+	var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_item_popup.gd")
+	popup_script._enabled = Globals.save_file.get_meta(META_ITEM_POPUPS_ENABLED, popup_script._enabled)
 
 static func _add_label(bbcode_text: String, relevant := true) -> void:
 	var label := RichTextLabel.new()

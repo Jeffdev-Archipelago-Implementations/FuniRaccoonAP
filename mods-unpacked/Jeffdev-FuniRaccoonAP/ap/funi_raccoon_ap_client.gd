@@ -50,6 +50,10 @@ const BRAZIL_TRAIN_TICKET_AP_ITEM_ID = 800
 const PHONE_SCREEN_SIZE = Vector2i(240, 480)
 
 const POLICE_CLUSTER_SCENE = preload("res://Scene/characters/police/police_cluster.tscn")
+const POLICE_WARNING_SCENE = preload("res://Scene/characters/police/police_warning.tscn")
+const POLICE_TRAP_WARNING_DURATION: float = 20.0
+const POLICE_TRAP_CAR_DURATION: float = 25.0
+const MAX_CONCURRENT_POLICE_CLUSTERS: int = 1
 
 ## [score_threshold, ap_location_id] pairs for kei truck stunt checks.
 const TRUCK_SCORE_CHECKS: Array = [
@@ -172,6 +176,10 @@ const EURO_LOCATION_IDS: Dictionary = {
 	"/root/Desert_Level/money11/money1":              8044, # Desert: Euro on top of fridge land skull
 	"/root/Desert_Level/money12/money1":              8045, # Desert: Euro on on blue house roof in fridge land
 	"/root/Desert_Level/money13/money1":              8046, # Desert: Euro in BLMB nuclear reactor
+	# Brazil
+	"/root/Level_Container/money/money100":           8047, # Brazil: Euro on top of train
+	# Hat Store
+	"/root/Node3D/money/money30":                     8048, # Hat Store: Euro from saving toastie
 }
 
 ## Maps item_tracker.item_id enum values to AP location IDs.
@@ -339,8 +347,13 @@ const ITEM_ID_TO_AP_LOCATION: Dictionary = {
 var _receiving_from_ap: bool = false
 # Item index at connect time; popups only fire for items at or above this index.
 var _baseline_item_index: int = -1
-# Edge-detects the OOB fall in _physics_process (fires once per fall, not once per frame below it).
-var _was_below_void: bool = false
+# ItemTacker.thresholds as shipped by the game, captured before overwriting with
+# the slot's threshold options so it can be restored on disconnect.
+var _vanilla_thresholds: Array = []
+
+# True once we've fully joined the multiworld this session. Used so a *failed* connect
+# attempt (which also ends in DISCONNECTED) doesn't kick the player back to the menu.
+var _was_connected: bool = false
 
 const AP_COLORS: Dictionary = {
 	"red":       "#EE0000",
@@ -360,11 +373,6 @@ func _ready() -> void:
 	super._ready()
 	connection_state_changed.connect(_on_connection_state_changed)
 	websocket_client.on_print_json.connect(_on_print_json)
-	bounced_received.connect(_on_deathlink_bounced)
-	# Must observe the player's position before raccoon_player_controller.gd's own
-	# _physics_process resets it on the same frame (its player_catcher() check runs at the
-	# default priority of 0), so this needs to run first.
-	process_physics_priority = -1000000
 
 # Boilerplate server/boot messages shown on connect that we don't want in chat.
 const FILTERED_MESSAGE_SUBSTRINGS: Array = [
@@ -468,20 +476,77 @@ func _show_popup(item_name: String, fallback: String, item_dict: Dictionary, sho
 		get_tree().get_root()
 	)
 
+var _active_police_clusters: Array = []
+var _active_police_warning: Node2D = null
+
+func clear_police_warning() -> void:
+	if is_instance_valid(_active_police_warning):
+		_active_police_warning.queue_free()
+	_active_police_warning = null
+
 func _trigger_police_trap() -> void:
 	var raccoon_player := Globals.get_player()
 	if not is_instance_valid(raccoon_player) or not is_instance_valid(LevelChanger.current_level):
 		ModLoaderLog.warning("Police Trap: no valid player/level to spawn into, skipping.", _LOG)
 		return
+	# Cap concurrent clusters so a burst of Police Trap items (e.g. several granted at once on
+	# connect) can't spawn dozens of pathfinding cars simultaneously - that hung the game before.
+	_active_police_clusters = _active_police_clusters.filter(func(c): return is_instance_valid(c))
+	if _active_police_clusters.size() >= MAX_CONCURRENT_POLICE_CLUSTERS:
+		ModLoaderLog.info("Police Trap: a cluster is already active, skipping this one.", _LOG)
+		return
+
 	var police_inst: Node3D = POLICE_CLUSTER_SCENE.instantiate()
 	LevelChanger.current_level.add_child(police_inst)
-	police_inst.global_position = raccoon_player.global_position
+	# Offset slightly: police_cluster.tscn's first car has zero local transform, so spawning
+	# exactly on the player made its look_at() fail every frame (origin == target position).
+	police_inst.global_position = raccoon_player.global_position + Vector3(2.0, 0.0, 2.0)
+	_active_police_clusters.append(police_inst)
+	get_tree().create_timer(POLICE_TRAP_CAR_DURATION).timeout.connect(func():
+		if is_instance_valid(police_inst):
+			police_inst.queue_free()
+	)
+
+	clear_police_warning()
+	var warning_inst: Node2D = POLICE_WARNING_SCENE.instantiate()
+	_active_police_warning = warning_inst
+	warning_inst.tree_exited.connect(func():
+		if _active_police_warning == warning_inst:
+			_active_police_warning = null
+	)
+	var message_label: RichTextLabel = warning_inst.get_node("CanvasLayer/CenterContainer/RichTextLabel")
+	if is_instance_valid(message_label):
+		message_label.text = "[center]THEY GOT A POLICE TRAP LMAOOOO[/center]\n\n\n[center][shake][color=#FF0000]GET THEY/THEM ASS[/color][/shake][/center]"
+	var warning_timer: Timer = warning_inst.get_node("Timer")
+	if is_instance_valid(warning_timer):
+		warning_timer.wait_time = POLICE_TRAP_WARNING_DURATION
+	get_tree().get_root().add_child(warning_inst)
+
 	ModLoaderLog.info("Police Trap triggered at %s." % str(raccoon_player.global_position), _LOG)
 
+var _phone_trap_original_size: Vector2i = Vector2i(854, 480)
+var _phone_trap_active: bool = false
+var _phone_trap_generation: int = 0
+
+const PHONE_RATIO_TRAP_DURATION: float = 30.0
+
 func _trigger_phone_ratio_trap() -> void:
+	if not _phone_trap_active:
+		_phone_trap_original_size = Globals.save_file.screen_size
+		_phone_trap_active = true
+	_phone_trap_generation += 1
+	var this_generation: int = _phone_trap_generation
 	Globals.save_file.screen_size = PHONE_SCREEN_SIZE
 	Globals.updated_res.emit()
-	ModLoaderLog.info("Phone Ratio Trap triggered.", _LOG)
+	ModLoaderLog.info("Phone Ratio Trap triggered; reverting in %.0fs." % PHONE_RATIO_TRAP_DURATION, _LOG)
+	get_tree().create_timer(PHONE_RATIO_TRAP_DURATION).timeout.connect(func():
+		if this_generation != _phone_trap_generation:
+			return
+		Globals.save_file.screen_size = _phone_trap_original_size
+		Globals.updated_res.emit()
+		_phone_trap_active = false
+		ModLoaderLog.info("Phone Ratio Trap expired; screen size reverted.", _LOG)
+	)
 
 func _send_check(meta_key: String, location_id: int) -> void:
 	var checked: Array = Globals.save_file.get_meta(meta_key, [])
@@ -594,7 +659,6 @@ func _on_received_items(command: Dictionary) -> void:
 			_show_popup(item_name, "100 Euro", items[i], show_popup)
 		elif ap_item_id == POLICE_TRAP_AP_ITEM_ID:
 			_trigger_police_trap()
-			_show_popup(item_name, "Police Trap", items[i], show_popup)
 		elif ap_item_id == PHONE_RATIO_TRAP_AP_ITEM_ID:
 			_trigger_phone_ratio_trap()
 			changed = true
@@ -656,16 +720,40 @@ func update_map_location_for_cluster(cluster_id: int) -> void:
 		return
 	set_value(_map_location_key(), "replace", act_name)
 
+## Refuses to join a room whose seed doesn't match the one this save file was first connected
+## to (stored as the "ap_seed" save meta by ap_connect_panel.gd on successful connect), so a
+## save can't be accidentally corrupted by playing it against a different multiworld.
+func _validate_room_info(room_info_to_validate: Dictionary) -> int:
+	var stored_seed: String = str(Globals.save_file.get_meta("ap_seed", ""))
+	var room_seed: String = str(room_info_to_validate.get("seed_name", ""))
+	if stored_seed != "" and room_seed != "" and stored_seed != room_seed:
+		ModLoaderLog.warning(
+			"Seed mismatch: save was started on seed '%s' but the room is seed '%s'. Refusing to connect." % [stored_seed, room_seed],
+			_LOG
+		)
+		return ConnectResult.SEED_MISMATCH
+	return ConnectResult.SUCCESS
+
 func _on_connection_state_changed(new_state: int, _error: int = 0) -> void:
 	if new_state == ConnectState.CONNECTING:
 		_baseline_item_index = -1
 	elif new_state == ConnectState.CONNECTED_TO_MULTIWORLD:
+		_was_connected = true
 		_baseline_item_index = Globals.save_file.get_meta("ap_received_item_index", 0)
-		if is_deathlink_enabled():
-			enable_deathlink()
+		# Swap the dumpster progress thresholds (ItemTacker.thresholds) for the slot's
+		# options so vanilla consumers like dumpster_text.gd display AP values.
+		if _vanilla_thresholds.is_empty():
+			_vanilla_thresholds = ItemTacker.thresholds.duplicate()
+		ItemTacker.thresholds = [
+			int(slot_data.get("options", {}).get("museum_threshold", 15)),
+			int(slot_data.get("options", {}).get("act2_threshold", 25)),
+			int(slot_data.get("options", {}).get("act3_threshold", 35)),
+			int(slot_data.get("options", {}).get("act4_threshold", 50)),
+		]
 		if LevelChanger.current_level != null:
 			update_map_location(LevelChanger.current_level.level_id)
 		sync_stored_items()
+		Globals.save_file.streamer_mode = true
 		var rackheath = LevelChanger.all_levels.get(level_changer.LEVEL_ID.DEFAULT)
 		if rackheath != null:
 			rackheath.level_found = false
@@ -687,93 +775,32 @@ func _on_connection_state_changed(new_state: int, _error: int = 0) -> void:
 					"START_SPAWN"
 				)
 		var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
-		popup_script.show_message("Controls: [color=#FAFAD2]F2[/color]: Goal | [color=#FAFAD2]F3[/color]: Toggle Popups | [color=#FAFAD2]F4[/color]: Filter Messages | [color=#FAFAD2]F5[/color]: Toggle DeathLink | [color=#FAFAD2]F6[/color]: Toggle Messages", get_tree().get_root())
+		popup_script.show_message(popup_script.HELP_MESSAGE, get_tree().get_root())
 	elif new_state == ConnectState.DISCONNECTED:
-		var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
-		popup_script.clear_all()
-		var item_popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_item_popup.gd")
-		item_popup_script.clear_all()
-		popup_script.show_message("[color=#EE0000]Disconnected from Archipelago[/color]", get_tree().get_root())
-		Globals.QUIT_TO_MEUN()
+		if not _vanilla_thresholds.is_empty():
+			ItemTacker.thresholds.assign(_vanilla_thresholds)
+		if _was_connected:
+			# We lost an established multiworld connection: clean up and return to menu.
+			_was_connected = false
+			var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
+			popup_script.clear_all()
+			var item_popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_item_popup.gd")
+			item_popup_script.clear_all()
+			popup_script.show_message("[color=#EE0000]Disconnected from Archipelago[/color]", get_tree().get_root())
+			Globals.QUIT_TO_MEUN()
 
-## Runs before raccoon_player_controller.gd's own _physics_process
-func _physics_process(_delta: float) -> void:
-	if connect_state != ConnectState.CONNECTED_TO_MULTIWORLD:
-		return
-	var raccoon_player := Globals.get_player()
-	if not is_instance_valid(raccoon_player):
-		return
-	var below_void: bool = raccoon_player.global_position.y <= -1000.0
-	if below_void and not _was_below_void:
-		report_death("Got a little too funi and threw themselves off a ledge.")
-	_was_below_void = below_void
+const _DEFAULT_GATE_THRESHOLDS := [15, 25, 35, 50]
 
-## Whether DeathLink is currently on for this save. Defaults to slot_data's death_link option
-## the first time it's checked, but F5 (see ap_chat_popup.gd) can flip it per-save from there.
-func is_deathlink_enabled() -> bool:
-	return bool(Globals.save_file.get_meta("ap_deathlink_enabled", bool(slot_data.get("death_link", false))))
-
-## Toggles DeathLink on/off for this save (bound to F5) and updates the server-side tag.
-func toggle_deathlink() -> void:
-	var new_state: bool = not is_deathlink_enabled()
-	Globals.save_file.set_meta("ap_deathlink_enabled", new_state)
-	Globals.save_game()
-	if new_state:
-		enable_deathlink()
-	else:
-		disable_deathlink()
-
-## Removes the "DeathLink" tag from this slot, the inverse of the base client's enable_deathlink().
-func disable_deathlink() -> void:
-	player_tags.erase("DeathLink")
-	if connect_state == ConnectState.CONNECTED_TO_MULTIWORLD:
-		websocket_client.send_connect_update(-1, player_tags)
-
-## Called whenever the player "dies" (currently: falls out of bounds). Tracks deaths locally
-## and only sends a DeathLink once death_link_amnesty deaths have accumulated, per the
-## DeathLinkAmnesty option. No-ops if DeathLink is currently disabled for this save.
-func report_death(cause: String = "") -> void:
-	if not is_deathlink_enabled():
-		return
-	if connect_state != ConnectState.CONNECTED_TO_MULTIWORLD:
-		return
-	var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
-	var cause_text: String = " (%s)" % cause if cause != "" else ""
-	var amnesty: int = max(1, int(slot_data.get("death_link_amnesty", 1)))
-	var count: int = int(Globals.save_file.get_meta("ap_death_count", 0)) + 1
-	if count >= amnesty:
-		send_deathlink("", cause)
-		count = 0
-		ModLoaderLog.info("DeathLink sent (cause='%s'); amnesty counter reset." % cause, _LOG)
-		popup_script.show_message("[color=#EE0000]You died%s![/color] [color=#FAFAD2]Sending DeathLink...[/color]" % cause_text, get_tree().get_root())
-	else:
-		var remaining: int = amnesty - count
-		ModLoaderLog.info("Death recorded (%d/%d before next DeathLink send)." % [count, amnesty], _LOG)
-		popup_script.show_message("[color=#EE0000]You died%s![/color] [color=#FAFAD2]%d more death%s until DeathLink.[/color]" % [cause_text, remaining, "s" if remaining != 1 else ""], get_tree().get_root())
-	Globals.save_file.set_meta("ap_death_count", count)
-	Globals.save_game()
-
-## Handles incoming Bounced packets tagged "DeathLink" from other players in the multiworld.
-func _on_deathlink_bounced(bounced_data: Dictionary) -> void:
-	var tags: Array = bounced_data.get("tags", [])
-	if not tags.has("DeathLink"):
-		return
-	var data: Dictionary = bounced_data.get("data", {})
-	var source: String = str(data.get("source", ""))
-	if source == player:
-		return  # Echo of our own outgoing DeathLink; the server bounces it back to us too.
-	var cause: String = str(data.get("cause", ""))
-	ModLoaderLog.info("DeathLink received from '%s' (cause='%s')." % [source, cause], _LOG)
-	# Getting killed by someone else's DeathLink shouldn't count toward (or reset by itself)
-	# our own outgoing amnesty counter beyond this explicit reset.
-	Globals.save_file.set_meta("ap_death_count", 0)
-	Globals.save_game()
-	var raccoon_player := Globals.get_player()
-	if is_instance_valid(raccoon_player) and is_instance_valid(LevelChanger.current_level):
-		LevelChanger.current_level.spawn_pos(Globals.player_inst, "START_SPAWN")
-		var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
-		var cause_text: String = " (%s)" % cause if cause != "" else ""
-		popup_script.show_message("[color=#EE0000]%s killed you%s![/color]" % [source, cause_text], get_tree().get_root())
+## Remaps a vanilla dumpster gate value (a hub door/floor/meter's hardcoded 15/25/35/50)
+## to this slot's configured threshold. Values that aren't gate defaults (0, 3, etc.) are
+## returned unchanged, as is everything while disconnected (thresholds not yet swapped).
+func slot_threshold_for(vanilla_value: int) -> int:
+	if _vanilla_thresholds.is_empty():
+		return vanilla_value
+	var idx: int = _DEFAULT_GATE_THRESHOLDS.find(vanilla_value)
+	if idx == -1 or idx >= ItemTacker.thresholds.size():
+		return vanilla_value
+	return int(ItemTacker.thresholds[idx])
 
 func sync_stored_items() -> void:
 	var thrown: Array = Globals.save_file.get_meta("ap_stored_items", [])
@@ -902,9 +929,10 @@ func is_goal_completed(goal: String) -> bool:
 func _goal_requirements_met(goal: String) -> bool:
 	var stored: Array = Globals.save_file.items_stored
 	var dumpster_count: int = stored.size()
+	var act4_threshold: int = slot_threshold_for(50)
 	match goal:
 		"orb":
-			return (dumpster_count >= 50
+			return (dumpster_count >= act4_threshold
 				and stored.has(item_tracker.item_id.ORB)
 				and stored.has(item_tracker.item_id.COOLING_ROD)
 				and stored.has(item_tracker.item_id.COOLING_ROD_PLIMBO)
@@ -916,14 +944,14 @@ func _goal_requirements_met(goal: String) -> bool:
 				and stored.has(item_tracker.item_id.COOLING_ROD_PLIMBO)
 				and stored.has(item_tracker.item_id.COOLING_ROD_FRIDGE_KING))
 		"fellowship":
-			return (dumpster_count >= 50
+			return (dumpster_count >= act4_threshold
 				and stored.has(item_tracker.item_id.PRIESTESS)
 				and stored.has(item_tracker.item_id.GREENIE)
 				and stored.has(item_tracker.item_id.COOLING_ROD)
 				and stored.has(item_tracker.item_id.COOLING_ROD_PLIMBO)
 				and stored.has(item_tracker.item_id.COOLING_ROD_FRIDGE_KING))
 		"lugh":
-			return dumpster_count >= 50
+			return dumpster_count >= act4_threshold
 		_:
 			ModLoaderLog.warning("check_goal: unknown goal '%s'." % goal, _LOG)
 			return false
