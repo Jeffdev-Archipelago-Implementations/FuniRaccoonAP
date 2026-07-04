@@ -680,6 +680,10 @@ func _on_received_items(command: Dictionary) -> void:
 		else:
 			ModLoaderLog.info("AP item id=%d ('%s') has no handler, skipping." % [ap_item_id, item_name], _LOG)
 
+		# The base class emits this per item; keep that contract since this override
+		# replaces its handler entirely (UI refreshes listen for it).
+		item_received.emit(item_name, items[i])
+
 		stored_index = absolute_index + 1
 		Globals.save_file.set_meta("ap_received_item_index", stored_index)
 

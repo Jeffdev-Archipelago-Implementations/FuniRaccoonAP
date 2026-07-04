@@ -1,9 +1,24 @@
 extends Node
 
 const MOD_NAME = "Jeffdev-FuniRaccoonAP"
-const MOD_VERSION = "1.6.0"
+const MOD_VERSION = "1.6.1"
 const LOG_NAME = MOD_NAME + "/mod_main"
 const CONFIG_PATH = "user://ap_connect.json"
+
+# Held-item HUD icons for these items are blacked out until their AP check has been sent.
+const BLACKOUT_ITEMS: Array = [
+	item_tracker.item_id.CHICKEN,
+	item_tracker.item_id.BROB_ENERGY,
+	item_tracker.item_id.KEI_TRUCK,
+	item_tracker.item_id.GOO,
+	item_tracker.item_id.PICKAXE,
+	item_tracker.item_id.BUTTERFLY,
+	item_tracker.item_id.ORB,
+	item_tracker.item_id.PRIESTESS,
+	item_tracker.item_id.GREENIE,
+	item_tracker.item_id.MINES_KEY,
+	item_tracker.item_id.FRIDGE_KEY,
+]
 
 var ap_websocket_connection
 var ap_client
@@ -13,6 +28,10 @@ var _color_randomized_this_transition: bool = false
 # Replacement title textures (base game's title_text.png / title_text_no_bg.png).
 var _title_text_tex: Texture2D
 var _title_text_no_bg_tex: Texture2D
+
+# =============================================================================
+# Lifecycle
+# =============================================================================
 
 func _init() -> void:
 	ModLoaderLog.info("Init", LOG_NAME)
@@ -52,12 +71,12 @@ func _ready() -> void:
 	var ApChatPopupScript = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
 	ApChatPopupScript.set_ap_client(ap_client)
 	load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/level_access_guard.gd").set_client(ap_client)
-		
+
 	var ApConnectPanelScript = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_connect_panel.tscn")
 	connect_panel = ApConnectPanelScript.instantiate()
 	connect_panel.ap_client = ap_client
 	add_child(connect_panel)
-	
+
 	_title_text_tex = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/images/title_text.png")
 	_title_text_no_bg_tex = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/images/title_text_no_bg.png")
 	if _title_text_tex == null or _title_text_no_bg_tex == null:
@@ -87,14 +106,69 @@ func _ready() -> void:
 				ap_client.check_goal("lugh")
 	)
 
+# =============================================================================
+# Node interception
+# =============================================================================
+
 func _on_node_added(node: Node) -> void:
 	_replace_title_on(node)
+
+	# --- Main menu / save select ---
+
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Menus/setup/load_game.gd":
+		node.ready.connect(func():
+			if ap_client.connect_state != ap_client.ConnectState.CONNECTED_TO_MULTIWORLD:
+				connect_panel.show_overlay()
+		, CONNECT_ONE_SHOT)
+
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/MainMenu/save_file_select_logic.gd":
+		node.ready.connect(func():
+			_setup_save_file_select(node)
+		, CONNECT_ONE_SHOT)
+
+	# --- Pause menu ---
+
+	if node.name == "Quit" and node.get_script() != null:
+		if node.get_script().resource_path == "res://Scene/Menus/quit_menu.gd":
+			ModLoaderLog.info("Found quit button, connecting pressed signal.", LOG_NAME)
+			node.pressed.connect(_on_quit_pressed)
+			# Add a "To Rackheath" entry beside Quit
+			call_deferred("_add_rackheath_pause_option", node)
+
+	# --- Player menu UI ---
+
+	# Item list checkmarks: use ap_stored_items (sent checks) instead of items_stored (received).
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Player Stuff/menu/objectives_list.gd":
+		node.ready.connect(func():
+			_ap_rebuild_objectives_list(node)
+		, CONNECT_ONE_SHOT)
+
+	# Paper counter: show checks sent rather than items received.
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Player Stuff/menu/items_left_new.gd":
+		node.ready.connect(func():
+			_ap_fix_items_left_counter(node)
+		, CONNECT_ONE_SHOT)
+
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Player Stuff/ui/object_icon_meta.gd":
+		_update_object_icon_blackout(node)
+		# Re-evaluate while the icon is alive: checks sent and items received from the
+		# multiworld can both change the blackout state after the icon was created.
+		var refresh: Callable = _update_object_icon_blackout.bind(node)
+		var refresh_on_item: Callable = refresh.unbind(2)
+		Globals.dumpster_added_item.connect(refresh)
+		ap_client.item_received.connect(refresh_on_item)
+		node.tree_exiting.connect(func():
+			Globals.dumpster_added_item.disconnect(refresh)
+			ap_client.item_received.disconnect(refresh_on_item)
+		)
+
+	# --- Hub world ---
 
 	# Hub dumpster gates/displays hardcode vanilla thresholds (15/25/35/50) per instance.
 	# Remap them to this slot's thresholds. Runs before their _ready reads the value.
 	if node.get_script() != null:
 		match node.get_script().resource_path:
-			"res://Scene/Levels/hub_world/floors/number_reached.gd":
+			"res://Scene/Levels/hub_world/number_reached.gd":
 				node.stored_size = ap_client.slot_threshold_for(node.stored_size)
 			"res://Scene/Levels/hub_world/item_meter.gd":
 				node.item_count_max = ap_client.slot_threshold_for(node.item_count_max)
@@ -105,18 +179,38 @@ func _on_node_added(node: Node) -> void:
 					node.second_floor_threshold = ap_client.slot_threshold_for(25)
 					node.third_floor_threshold = ap_client.slot_threshold_for(35)
 
-	if node.name == "Quit" and node.get_script() != null:
-		if node.get_script().resource_path == "res://Scene/Menus/quit_menu.gd":
-			ModLoaderLog.info("Found quit button, connecting pressed signal.", LOG_NAME)
-			node.pressed.connect(_on_quit_pressed)
-			# Add a "To Rackheath" entry beside Quit
-			call_deferred("_add_rackheath_pause_option", node)
+	# Hub item spawner: in the future spawn nothing; before the future spawn only player-thrown items
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/hub_world/item_spawner.gd":
+		node.set_script(null)
+		if not Globals.save_file.is_the_future:
+			node.ready.connect(func():
+				var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
+				var items: Array = []
+				if ap_stored.size() < 15:
+					items = ap_stored.duplicate()
+				else:
+					var attempts: int = 0
+					while items.size() < 15 and attempts < ap_stored.size() * 3:
+						var ran_item = ap_stored.pick_random()
+						if not items.has(ran_item):
+							items.append(ran_item)
+						attempts += 1
+				for item_id in items:
+					if item_id == item_tracker.item_id.KEI_TRUCK:
+						continue
+					if not ItemTacker.item_list_data.has(item_id):
+						continue
+					var item_inst: InteractData = ItemTacker.item_list_data[item_id].instantiate()
+					if item_inst == null:
+						continue
+					item_inst.global_position = node.global_position
+					item_inst.freeze = false
+					node.add_child(item_inst)
+					item_inst.apply_central_impulse(Vector3.UP * 10)
+					await node.get_tree().create_timer(0.1).timeout
+			)
 
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Menus/setup/load_game.gd":
-		node.ready.connect(func():
-			if ap_client.connect_state != ap_client.ConnectState.CONNECTED_TO_MULTIWORLD:
-				connect_panel.show_overlay()
-		, CONNECT_ONE_SHOT)
+	# --- Level access gating ---
 
 	if node.get_script() != null and node.get_script().resource_path == "res://Scripts/levels/player_level_change.gd":
 		node.ready.connect(func():
@@ -144,64 +238,7 @@ func _on_node_added(node: Node) -> void:
 			)
 		)
 
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/funbells/levelup_strength.gd":
-		node.ready.connect(func():
-			node.dumbells.eaten_signal.disconnect(node._on_dumbell_levelup_pickup)
-			node.dumbells.eaten_signal.connect(func(_player):
-				if Globals.save_file.collect_upgrades.has(node.collectable_id):
-					return
-				Globals.save_file.collect_upgrades.append(node.collectable_id)
-				Globals.save_game()
-				ap_client.dumbbell_eaten(node.collectable_id)
-			)
-		)
-
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/museum/the_museum.gd":
-		node.ready.connect(func():
-			var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
-			for child in node.get_children():
-				if child.get_script() == null or child.get_script().resource_path != "res://Scene/Levels/museum/item_museum.gd":
-					continue
-				if child.item == null:
-					continue
-				var obj_id = child.item.obj_id
-				if Globals.save_file.items_stored.has(obj_id) and not ap_stored.has(obj_id):
-					# AP-received but not player-thrown: hide from museum
-					for spawn_child in child.get_node("spawn").get_children():
-						spawn_child.queue_free()
-					if is_instance_valid(child.interact_area):
-						child.interact_area.queue_free()
-				elif ap_stored.has(obj_id) and not Globals.save_file.items_stored.has(obj_id):
-					child.get_node("spawn").add_child(child.item)
-					child.item.position.y = child.item.height / 2
-		)
-
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/museum/ending_controller.gd":
-		node.ready.connect(func():
-			node.dialogue_interact.dialogue_closed.connect(func():
-				ap_client.check_goal("museum")
-			)
-		)
-
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/keiTruck/stunt_tracker.gd":
-		node.ready.connect(func():
-			node.hit_ground.connect(func():
-				ap_client.truck_score_achieved(node.score)
-			)
-		)
-
-	if node.get_script() != null and node.get_script().resource_path == "res://Globals/item_tracker/player_stopper_office.gd":
-		node.ready.connect(func():
-			var blockers = node.get_node_or_null("PlayerBlockers")
-			if is_instance_valid(blockers):
-				blockers.queue_free()
-		)
-
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/LevelSelectOrb/level_select_orb.gd":
-		# Log the cluster contents the instant the orb script is added, BEFORE _ready
-		# instantiates every level_icon. If the game freezes/crashes after this line
-		# with no matching "orb ready" line below, the crash is during icon build —
-		# check which levels (esp. Rackheath/DEFAULT) were about to be drawn.
 		_log_cluster_levels(node.get("level_cluster_id"))
 		node.ready.connect(func():
 			ModLoaderLog.info("Level select orb ready (cluster_id=%s)" % str(node.get("level_cluster_id")), LOG_NAME)
@@ -228,37 +265,38 @@ func _on_node_added(node: Node) -> void:
 			node.add_child(guard)
 		)
 
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/Gully/gully_cooling_rod_collect.gd":
+	# Goo Office exit to Blimbo City
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/LongOffice/escape_to_blimbo_city.gd":
 		node.ready.connect(func():
-			node.body_entered.disconnect(node.cooling_rod_logic)
-			node.body_entered.connect(func(body: Node3D):
-				if body is InteractData:
-					var stored: Array = Globals.save_file.items_stored
-					if body.obj_id == item_tracker.item_id.COOLING_ROD_FRIDGE_KING and not stored.has(item_tracker.item_id.COOLING_ROD_FRIDGE_KING):
-						return
-					if body.obj_id == item_tracker.item_id.COOLING_ROD_PLIMBO and not stored.has(item_tracker.item_id.COOLING_ROD_PLIMBO):
-						return
-				node.cooling_rod_logic(body)
+			var LevelAccessGuard = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/level_access_guard.gd")
+			node.pressy_button.button_pressed.disconnect(node.button_pressed)
+			node.pressy_button.button_pressed.connect(func():
+				var have: int = Globals.save_file.get_meta("ap_received_item_index", 0)
+				var required: int = LevelAccessGuard.get_required_for_level(level_changer.LEVEL_ID.BLIMBO_CITY)
+				if have < required:
+					ModLoaderLog.info("Goo Office exit blocked: need %d items, have %d." % [required, have], LOG_NAME)
+					return
+				node.button_pressed()
 			)
 		)
 
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Player Stuff/ui/object_icon_meta.gd":
-		if ap_client.connect_state == ap_client.ConnectState.CONNECTED_TO_MULTIWORLD:
-			var blackout_items: Array = [
-				item_tracker.item_id.CHICKEN, 
-				item_tracker.item_id.BROB_ENERGY,
-				item_tracker.item_id.KEI_TRUCK,
-				item_tracker.item_id.GOO,
-				item_tracker.item_id.PICKAXE,
-				item_tracker.item_id.BUTTERFLY,
-				item_tracker.item_id.ORB,
-				item_tracker.item_id.PRIESTESS,
-				item_tracker.item_id.GREENIE,
-				item_tracker.item_id.MINES_KEY,
-				item_tracker.item_id.FRIDGE_KEY]
-			var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
-			if ap_client.ITEM_ID_TO_AP_LOCATION.has(node.icon_id) and not ap_stored.has(node.icon_id) and blackout_items.has(node.icon_id):
-				node.modulate = Color.BLACK
+	# Brazil train: Gate based on Brazil Train Ticket item, so remove the existing script
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/raccoon_central_station/brazil_deleter.gd":
+		node.set_script(null)
+
+	# --- Location checks ---
+
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/funbells/levelup_strength.gd":
+		node.ready.connect(func():
+			node.dumbells.eaten_signal.disconnect(node._on_dumbell_levelup_pickup)
+			node.dumbells.eaten_signal.connect(func(_player):
+				if Globals.save_file.collect_upgrades.has(node.collectable_id):
+					return
+				Globals.save_file.collect_upgrades.append(node.collectable_id)
+				Globals.save_game()
+				ap_client.dumbbell_eaten(node.collectable_id)
+			)
+		)
 
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Dumpster/Dumpster.gd":
 		node.ready.connect(func():
@@ -322,16 +360,122 @@ func _on_node_added(node: Node) -> void:
 			)
 		)
 
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/keiTruck/stunt_tracker.gd":
+		node.ready.connect(func():
+			node.hit_ground.connect(func():
+				ap_client.truck_score_achieved(node.score)
+			)
+		)
+
+	if node.has_method("add_money"):
+		node.ready.connect(func():
+			var money_id: String = node.get("money_id") if node.get("money_id") != null else ""
+			if not ap_client.EURO_LOCATION_IDS.has(money_id):
+				return
+			node.get_parent().connect("eaten_signal", func(_player):
+				ap_client.euro_collected(money_id)
+			)
+		)
+
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/cat/find_cat_quest.gd":
+		node.ready.connect(func():
+			node.cat.pick_signal.connect(func(_player):
+				ap_client.cat_found(node.cat.obj_id)
+			)
+		)
+
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/hats/hat_collect.gd":
+		var hat_id = node.hat_id
+		var location_id: int = ap_client.HAT_LOCATION_IDS.get(hat_id, 0)
+		var player_collected: bool = Globals.save_file.get_meta("ap_checked_hats", []).has(location_id)
+		var ap_received: bool = Globals.save_file.unlocked_hats.has(hat_id)
+		if ap_received and not player_collected:
+			Globals.save_file.unlocked_hats.erase(hat_id)
+		node.ready.connect(func():
+			if player_collected:
+				if is_instance_valid(node.item_hat_data):
+					node.item_hat_data.queue_free()
+				return
+			if ap_received and not player_collected:
+				if not Globals.save_file.unlocked_hats.has(hat_id):
+					Globals.save_file.unlocked_hats.append(hat_id)
+			if is_instance_valid(node.item_hat_data):
+				node.item_hat_data.eaten_signal.disconnect(node.found_hat)
+				node.item_hat_data.eaten_signal.connect(func(_player):
+					ap_client.hat_collected(hat_id)
+				)
+		)
+
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/Jewel_One/jewel.gd":
+		var jewel_flag = node.jewel_flag
+		var location_id: int = ap_client.JEWEL_LOCATION_IDS.get(jewel_flag, 0)
+		var player_collected: bool = Globals.save_file.get_meta("ap_checked_jewels", []).has(location_id)
+		var ap_received: bool = Globals.save_file.states_occurred.has(jewel_flag)
+		if ap_received and not player_collected:
+			Globals.save_file.states_occurred.erase(jewel_flag)
+		node.ready.connect(func():
+			if player_collected:
+				if is_instance_valid(node.jewel):
+					node.jewel.queue_free()
+				return
+			if ap_received and not player_collected:
+				if not Globals.save_file.states_occurred.has(jewel_flag):
+					Globals.save_file.states_occurred.append(jewel_flag)
+			if is_instance_valid(node.jewel):
+				for conn in node.jewel.eaten_signal.get_connections():
+					node.jewel.eaten_signal.disconnect(conn["callable"])
+				node.jewel.eaten_signal.connect(func(_player):
+					ap_client.jewel_collected(jewel_flag)
+				)
+		)
+
+	# --- Shops / vehicles / Behrman Speedway ---
+
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/raccoon_central_station/deluxe_store.gd":
+		node.ready.connect(func():
+			node.dialogue_interaction_orb_seller.dialogue_closed.connect(func():
+				if ap_client.connect_state != ap_client.ConnectState.CONNECTED_TO_MULTIWORLD:
+					return
+				var deluxe_location_id: int = ap_client.ITEM_ID_TO_AP_LOCATION[item_tracker.item_id.FUNI_RACCOON_GAME_CD]
+				var hint_sent: bool = Globals.save_file.get_meta("ap_deluxe_store_hint_sent", false)
+				ap_client.send_location_scouts([deluxe_location_id], 0 if hint_sent else 1)
+				if not hint_sent:
+					Globals.save_file.set_meta("ap_deluxe_store_hint_sent", true)
+			)
+		)
+
+	# Deluxe purchase menu: replace "YOU WANT TO BUY THE DELUXE EDITION" with the
+	# scouted AP item and the player it belongs to.
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Menus/funi_raccoon_delux.gd":
+		if ap_client.connect_state == ap_client.ConnectState.CONNECTED_TO_MULTIWORLD:
+			var deluxe_location_id: int = ap_client.ITEM_ID_TO_AP_LOCATION[item_tracker.item_id.FUNI_RACCOON_GAME_CD]
+			var on_deluxe_info := func(location_id: int, _item_id: int, item_name: String, _game_name: String, _player_slot: int, player_name: String) -> void:
+				if location_id != deluxe_location_id or not is_instance_valid(node):
+					return
+				var label: RichTextLabel = node.get_node_or_null("Control/Control/RichTextLabel")
+				if label != null:
+					var target: String = item_name
+					if player_name != "":
+						target = "%s FOR %s" % [item_name, player_name]
+					label.text = " [wave]YOU WANT TO BUY %s" % target
+			ap_client.location_info_received.connect(on_deluxe_info)
+			node.tree_exiting.connect(func():
+				ap_client.location_info_received.disconnect(on_deluxe_info)
+			)
+			ap_client.send_location_scouts([deluxe_location_id], 0)
+
 	if node.get_script() != null:
 		var path: String = node.get_script().resource_path
 		if path == "res://Models/siopa_riz/siopa_riz_ui.gd":
 			node.ready.connect(func():
 				var shop_upgrade_labels = {
 					4001: node.radio_sign,
-					4002: node.boost_sign,
-					4003: node.jump_sign,
+					4002: node.jump_sign,
+					4003: node.boost_sign,
 				}
+				var ap_sign_tex: Texture2D = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/images/siopa_ris_ap.png")
 				for sign in shop_upgrade_labels.values():
+					_apply_ap_sign_texture(sign, ap_sign_tex)
 					if sign.title_rect and sign.title_rect.get_child_count() > 0:
 						var title_label = sign.title_rect.get_child(0)
 						if title_label.has_method("add_theme_font_size_override"):
@@ -428,111 +572,57 @@ func _on_node_added(node: Node) -> void:
 				)
 			)
 
-	# Hub item spawner: in the future spawn nothing; before the future spawn only player-thrown items
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/hub_world/item_spawner.gd":
-		node.set_script(null)
-		if not Globals.save_file.is_the_future:
-			node.ready.connect(func():
-				var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
-				var items: Array = []
-				if ap_stored.size() < 15:
-					items = ap_stored.duplicate()
-				else:
-					var attempts: int = 0
-					while items.size() < 15 and attempts < ap_stored.size() * 3:
-						var ran_item = ap_stored.pick_random()
-						if not items.has(ran_item):
-							items.append(ran_item)
-						attempts += 1
-				for item_id in items:
-					if item_id == item_tracker.item_id.KEI_TRUCK:
-						continue
-					if not ItemTacker.item_list_data.has(item_id):
-						continue
-					var item_inst: InteractData = ItemTacker.item_list_data[item_id].instantiate()
-					if item_inst == null:
-						continue
-					item_inst.global_position = node.global_position
-					item_inst.freeze = false
-					node.add_child(item_inst)
-					item_inst.apply_central_impulse(Vector3.UP * 10)
-					await node.get_tree().create_timer(0.1).timeout
-			)
+	# --- Goals ---
 
-	if node.has_method("add_money"):
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/museum/ending_controller.gd":
 		node.ready.connect(func():
-			var money_id: String = node.get("money_id") if node.get("money_id") != null else ""
-			if not ap_client.EURO_LOCATION_IDS.has(money_id):
-				return
-			node.get_parent().connect("eaten_signal", func(_player):
-				ap_client.euro_collected(money_id)
+			node.dialogue_interact.dialogue_closed.connect(func():
+				ap_client.check_goal("museum")
 			)
 		)
 
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/cat/find_cat_quest.gd":
+	# --- Museum display ---
+
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/museum/the_museum.gd":
 		node.ready.connect(func():
-			node.cat.pick_signal.connect(func(_player):
-				ap_client.cat_found(node.cat.obj_id)
-			)
+			var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
+			for child in node.get_children():
+				if child.get_script() == null or child.get_script().resource_path != "res://Scene/Levels/museum/item_museum.gd":
+					continue
+				if child.item == null:
+					continue
+				var obj_id = child.item.obj_id
+				if Globals.save_file.items_stored.has(obj_id) and not ap_stored.has(obj_id):
+					# AP-received but not player-thrown: hide from museum
+					for spawn_child in child.get_node("spawn").get_children():
+						spawn_child.queue_free()
+					if is_instance_valid(child.interact_area):
+						child.interact_area.queue_free()
+				elif ap_stored.has(obj_id) and not Globals.save_file.items_stored.has(obj_id):
+					child.get_node("spawn").add_child(child.item)
+					child.item.position.y = child.item.height / 2
 		)
 
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/hats/hat_collect.gd":
-		var hat_id = node.hat_id
-		var location_id: int = ap_client.HAT_LOCATION_IDS.get(hat_id, 0)
-		var player_collected: bool = Globals.save_file.get_meta("ap_checked_hats", []).has(location_id)
-		var ap_received: bool = Globals.save_file.unlocked_hats.has(hat_id)
-		if ap_received and not player_collected:
-			Globals.save_file.unlocked_hats.erase(hat_id)
+	# --- Block items/actions until received from AP ---
+
+	if node.get_script() != null and node.get_script().resource_path == "res://Globals/item_tracker/player_stopper_office.gd":
 		node.ready.connect(func():
-			if player_collected:
-				if is_instance_valid(node.item_hat_data):
-					node.item_hat_data.queue_free()
-				return
-			if ap_received and not player_collected:
-				if not Globals.save_file.unlocked_hats.has(hat_id):
-					Globals.save_file.unlocked_hats.append(hat_id)
-			if is_instance_valid(node.item_hat_data):
-				node.item_hat_data.eaten_signal.disconnect(node.found_hat)
-				node.item_hat_data.eaten_signal.connect(func(_player):
-					ap_client.hat_collected(hat_id)
-				)
+			var blockers = node.get_node_or_null("PlayerBlockers")
+			if is_instance_valid(blockers):
+				blockers.queue_free()
 		)
 
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/Jewel_One/jewel.gd":
-		var jewel_flag = node.jewel_flag
-		var location_id: int = ap_client.JEWEL_LOCATION_IDS.get(jewel_flag, 0)
-		var player_collected: bool = Globals.save_file.get_meta("ap_checked_jewels", []).has(location_id)
-		var ap_received: bool = Globals.save_file.states_occurred.has(jewel_flag)
-		if ap_received and not player_collected:
-			Globals.save_file.states_occurred.erase(jewel_flag)
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/Gully/gully_cooling_rod_collect.gd":
 		node.ready.connect(func():
-			if player_collected:
-				if is_instance_valid(node.jewel):
-					node.jewel.queue_free()
-				return
-			if ap_received and not player_collected:
-				if not Globals.save_file.states_occurred.has(jewel_flag):
-					Globals.save_file.states_occurred.append(jewel_flag)
-			if is_instance_valid(node.jewel):
-				for conn in node.jewel.eaten_signal.get_connections():
-					node.jewel.eaten_signal.disconnect(conn["callable"])
-				node.jewel.eaten_signal.connect(func(_player):
-					ap_client.jewel_collected(jewel_flag)
-				)
-		)
-
-	# Goo Office exit to Blimbo City
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/LongOffice/escape_to_blimbo_city.gd":
-		node.ready.connect(func():
-			var LevelAccessGuard = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/level_access_guard.gd")
-			node.pressy_button.button_pressed.disconnect(node.button_pressed)
-			node.pressy_button.button_pressed.connect(func():
-				var have: int = Globals.save_file.get_meta("ap_received_item_index", 0)
-				var required: int = LevelAccessGuard.get_required_for_level(level_changer.LEVEL_ID.BLIMBO_CITY)
-				if have < required:
-					ModLoaderLog.info("Goo Office exit blocked: need %d items, have %d." % [required, have], LOG_NAME)
-					return
-				node.button_pressed()
+			node.body_entered.disconnect(node.cooling_rod_logic)
+			node.body_entered.connect(func(body: Node3D):
+				if body is InteractData:
+					var stored: Array = Globals.save_file.items_stored
+					if body.obj_id == item_tracker.item_id.COOLING_ROD_FRIDGE_KING and not stored.has(item_tracker.item_id.COOLING_ROD_FRIDGE_KING):
+						return
+					if body.obj_id == item_tracker.item_id.COOLING_ROD_PLIMBO and not stored.has(item_tracker.item_id.COOLING_ROD_PLIMBO):
+						return
+				node.cooling_rod_logic(body)
 			)
 		)
 
@@ -579,8 +669,6 @@ func _on_node_added(node: Node) -> void:
 					Globals.save_file.items_stored.append(id)
 			)
 		)
-
-	# Block Items until they are received
 
 	# Lugh Quests
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/SunGod/sun_god_cliff.gd":
@@ -674,50 +762,9 @@ func _on_node_added(node: Node) -> void:
 			)
 		)
 
-	# Brazil train: Gate based on Brazil Train Ticket item, so remove the existing script
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/raccoon_central_station/brazil_deleter.gd":
-		node.set_script(null)
-
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/MainMenu/save_file_select_logic.gd":
-		node.ready.connect(func():
-			_setup_save_file_select(node)
-		, CONNECT_ONE_SHOT)
-
-	# Item list checkmarks: use ap_stored_items (sent checks) instead of items_stored (received).
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Player Stuff/menu/objectives_list.gd":
-		node.ready.connect(func():
-			_ap_rebuild_objectives_list(node)
-		, CONNECT_ONE_SHOT)
-
-	# Paper counter: show checks sent rather than items received.
-	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Player Stuff/menu/items_left_new.gd":
-		node.ready.connect(func():
-			_ap_fix_items_left_counter(node)
-		, CONNECT_ONE_SHOT)
-
-# dump every level the cluster orb is about to draw, with its icon and found state for debugging
-func _log_cluster_levels(cluster_id) -> void:
-	if cluster_id == null:
-		ModLoaderLog.warning("Cluster orb added but level_cluster_id is null.", LOG_NAME)
-		return
-	ModLoaderLog.info("=== Cluster %s orb building. Levels in cluster: ===" % str(cluster_id), LOG_NAME)
-	for level_id in LevelChanger.all_levels:
-		var info = LevelChanger.all_levels[level_id]
-		if info == null or info.level_cluster != cluster_id:
-			continue
-		if not info.level_found:
-			continue
-		var icon = info.level_icon
-		var icon_kind: String = "null"
-		if icon != null:
-			icon_kind = "PackedScene" if icon is PackedScene else ("Texture" if icon is Texture2D else icon.get_class())
-		ModLoaderLog.info(
-			"  level=%s found=%s icon=%s [%s]" % [
-				str(level_id), str(info.level_found), str(icon), icon_kind
-			],
-			LOG_NAME
-		)
-	ModLoaderLog.info("=== end cluster %s level list ===" % str(cluster_id), LOG_NAME)
+# =============================================================================
+# Title screen replacement
+# =============================================================================
 
 # Swaps any Texture2D property on a node for our replacement if it's a base title image.
 func _replace_title_on(node: Node) -> void:
@@ -745,6 +792,10 @@ func _replace_title_on(node: Node) -> void:
 func _scan_existing_title() -> void:
 	for n in get_tree().root.find_children("*", "", true, false):
 		_replace_title_on(n)
+
+# =============================================================================
+# Save file select screen
+# =============================================================================
 
 func _scan_existing_save_select() -> void:
 	for n in get_tree().root.find_children("*", "", true, false):
@@ -825,6 +876,10 @@ func _show_ap_info(ap_label: RichTextLabel, raccoon_name: String) -> void:
 		ap_label.add_text(server_host)
 		ap_label.pop()
 
+# =============================================================================
+# Pause menu
+# =============================================================================
+
 func _on_quit_pressed() -> void:
 	ModLoaderLog.info("Quit pressed, disconnecting from AP.", LOG_NAME)
 	if ap_client:
@@ -877,7 +932,7 @@ func _add_rackheath_pause_option(quit_button: Node) -> void:
 		LevelChanger.LOAD_FROM_LEVEL_WITH_SHORT_ID(level_changer.LEVEL_ID.DEFAULT, Globals.player_inst, "START_SPAWN")
 	)
 	ModLoaderLog.success("Rackheath pause option added under '%s'." % parent.name, LOG_NAME)
-	
+
 func _find_pause_menu_root(from: Node) -> Node:
 	var n: Node = from
 	while n != null:
@@ -886,6 +941,10 @@ func _find_pause_menu_root(from: Node) -> Node:
 			return n
 		n = n.get_parent()
 	return null
+
+# =============================================================================
+# Player menu UI (objectives list / items-left counter)
+# =============================================================================
 
 func _ap_rebuild_objectives_list(node: Node) -> void:
 	# The captured node can be freed before this deferred ready callback runs (e.g.
@@ -1003,3 +1062,72 @@ func _ap_fix_items_left_counter(node: Node) -> void:
 					icon.set_val(item_inst.hud_icon, Globals.save_file.items_found.has(item_id), ap_stored.has(item_id))
 					item_inst.queue_free()
 		grid_idx += 1
+
+# Shop signs idle on frame 0 of their spin sheet; show the AP sign image while a
+# sign is unfocused and restore the vanilla spin sheet while it is focused. The AP
+# image (262x450) is scaled so its height matches the sheet's 250px frames.
+func _apply_ap_sign_texture(upgrade_sign, ap_tex: Texture2D) -> void:
+	if ap_tex == null or not is_instance_valid(upgrade_sign) or not is_instance_valid(upgrade_sign.item_sprite):
+		return
+	var sprite: AnimatedSprite2D = upgrade_sign.item_sprite
+	var spin_frames: SpriteFrames = sprite.sprite_frames
+	var spin_scale: Vector2 = sprite.scale
+	# Fixed reference height because the signs are different sizes
+	var ap_frames := SpriteFrames.new()
+	ap_frames.add_frame("default", ap_tex)
+	var ap_scale: Vector2 = spin_scale * (250.0 / float(ap_tex.get_height()))
+	sprite.sprite_frames = ap_frames
+	sprite.scale = ap_scale
+	# Runs after the sign's own toggle_spin (connected in its _ready), so the
+	# play/stop it did on the wrong SpriteFrames is redone on the right one here.
+	upgrade_sign.button.focus_entered.connect(func():
+		sprite.sprite_frames = spin_frames
+		sprite.scale = spin_scale
+		sprite.play("default")
+	)
+	upgrade_sign.button.focus_exited.connect(func():
+		sprite.stop()
+		sprite.sprite_frames = ap_frames
+		sprite.scale = ap_scale
+	)
+
+# Blacks out a held-item icon until the real item arrives from the multiworld
+# (items_stored) or our own check for it has been sent (ap_stored_items).
+# Safe to call from signals that outlive the icon.
+func _update_object_icon_blackout(icon: Node) -> void:
+	if not is_instance_valid(icon):
+		return
+	if ap_client.connect_state != ap_client.ConnectState.CONNECTED_TO_MULTIWORLD:
+		return
+	if not ap_client.ITEM_ID_TO_AP_LOCATION.has(icon.icon_id) or not BLACKOUT_ITEMS.has(icon.icon_id):
+		return
+	var items_stored: Array = Globals.save_file.items_stored
+	icon.modulate = Color.WHITE if items_stored.has(icon.icon_id) else Color.BLACK
+
+# =============================================================================
+# Debug helpers
+# =============================================================================
+
+# dump every level the cluster orb is about to draw, with its icon and found state for debugging
+func _log_cluster_levels(cluster_id) -> void:
+	if cluster_id == null:
+		ModLoaderLog.warning("Cluster orb added but level_cluster_id is null.", LOG_NAME)
+		return
+	ModLoaderLog.info("=== Cluster %s orb building. Levels in cluster: ===" % str(cluster_id), LOG_NAME)
+	for level_id in LevelChanger.all_levels:
+		var info = LevelChanger.all_levels[level_id]
+		if info == null or info.level_cluster != cluster_id:
+			continue
+		if not info.level_found:
+			continue
+		var icon = info.level_icon
+		var icon_kind: String = "null"
+		if icon != null:
+			icon_kind = "PackedScene" if icon is PackedScene else ("Texture" if icon is Texture2D else icon.get_class())
+		ModLoaderLog.info(
+			"  level=%s found=%s icon=%s [%s]" % [
+				str(level_id), str(info.level_found), str(icon), icon_kind
+			],
+			LOG_NAME
+		)
+	ModLoaderLog.info("=== end cluster %s level list ===" % str(cluster_id), LOG_NAME)
