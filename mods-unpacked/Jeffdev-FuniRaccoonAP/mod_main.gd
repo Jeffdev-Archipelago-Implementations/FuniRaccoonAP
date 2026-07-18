@@ -20,10 +20,32 @@ const BLACKOUT_ITEMS: Array = [
 	item_tracker.item_id.FRIDGE_KEY,
 ]
 
+# Items the item rando never shuffles (in addition to BLACKOUT_ITEMS): their placed
+# nodes are referenced by companion quest/logic scripts (cat quests, strength
+# funbells, toastie rescue), so swapping them would leave dangling references.
+const ITEM_RANDO_EXCLUDED: Array = [
+	item_tracker.item_id.CAT,
+	item_tracker.item_id.CONCRETE_CAT,
+	item_tracker.item_id.GIZMO_CAT,
+	item_tracker.item_id.KEKSZ_CAT,
+	item_tracker.item_id.MICHI_CAT,
+	item_tracker.item_id.BOINGLER_CAT,
+	item_tracker.item_id.FUN_BELLS,
+	item_tracker.item_id.GYM,
+	item_tracker.item_id.TOASTIE,
+	item_tracker.item_id.TV_REMOTE,
+	item_tracker.item_id.GOO,
+]
+
 var ap_websocket_connection
 var ap_client
 var connect_panel
 var _color_randomized_this_transition: bool = false
+
+# Item rando: global shuffle map (obj_id -> obj_id), one permutation over every
+# eligible check item in the game. Built lazily, rebuilt if the AP seed changes.
+var _item_rando_map: Dictionary = {}
+var _item_rando_map_seed: String = "<unset>"
 
 # Replacement title textures (base game's title_text.png / title_text_no_bg.png).
 var _title_text_tex: Texture2D
@@ -112,6 +134,13 @@ func _ready() -> void:
 
 func _on_node_added(node: Node) -> void:
 	_replace_title_on(node)
+
+	# --- Item rando ---
+
+	# Only editor-placed items (owner set by the level scene) are shuffled; runtime
+	# spawns (hub spawner, museum display, our own replacements) have owner == null.
+	if node is InteractData and node.owner != null:
+		_item_rando_try_swap(node)
 
 	# --- Main menu / save select ---
 
@@ -761,6 +790,107 @@ func _on_node_added(node: Node) -> void:
 				node.change_player_gravity(player)
 			)
 		)
+
+# =============================================================================
+# Item rando
+# =============================================================================
+
+# Shuffles which dumpster-check item spawns where, across the whole game. The map
+# is one seeded permutation of every eligible check item, so any spawn can become
+# any item, and every item still exists exactly where its preimage was placed.
+
+func _item_rando_enabled() -> bool:
+	if ap_client == null or Globals.save_file == null:
+		return false
+	# TODO: for testing, always on. Restore the slot option gate once the apworld
+	# has an item_rando option:
+	# if ap_client.connect_state != ap_client.ConnectState.CONNECTED_TO_MULTIWORLD:
+	#     return false
+	# return ap_client.slot_data.get("options", {}).get("item_rando", false)
+	return true
+
+func _item_rando_try_swap(item: InteractData) -> void:
+	if not _item_rando_enabled():
+		return
+	if not ap_client.ITEM_ID_TO_AP_LOCATION.has(item.obj_id):
+		return
+	if BLACKOUT_ITEMS.has(item.obj_id) or ITEM_RANDO_EXCLUDED.has(item.obj_id):
+		return
+	if _item_rando_level_root(item) == null:
+		return
+	var map: Dictionary = _item_rando_global_map()
+	var new_id = map.get(item.obj_id, item.obj_id)
+	if new_id == item.obj_id:
+		return
+	# Deferred so the swap happens outside the tree's add-notification.
+	call_deferred("_item_rando_swap", item, new_id)
+
+# Any ancestor exposing level_id marks this as a real level scene; menus and other
+# non-level scenes lack it, which opts them out. The main menu backdrop is itself a
+# level (LEVEL_ID.MAIN_MENU), so it is excluded explicitly.
+func _item_rando_level_root(item: Node) -> Node:
+	var ancestor: Node = item.get_parent()
+	while ancestor != null:
+		var level_id = ancestor.get("level_id")
+		if level_id != null:
+			if level_id == level_changer.LEVEL_ID.MAIN_MENU:
+				return null
+			return ancestor
+		ancestor = ancestor.get_parent()
+	return null
+
+func _item_rando_global_map() -> Dictionary:
+	var ap_seed: String = str(Globals.save_file.get_meta("ap_seed", ""))
+	if _item_rando_map_seed == ap_seed:
+		return _item_rando_map
+	var pool: Array = []
+	for item_id in ap_client.ITEM_ID_TO_AP_LOCATION.keys():
+		if BLACKOUT_ITEMS.has(item_id) or ITEM_RANDO_EXCLUDED.has(item_id):
+			continue
+		if not ItemTacker.item_list_data.has(item_id):
+			continue
+		pool.append(item_id)
+	pool.sort()
+	# Deterministic per slot seed, so the layout survives reconnects.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash("%s|item_rando" % ap_seed)
+	var shuffled: Array = pool.duplicate()
+	# Fisher-Yates with the seeded RNG (Array.shuffle() uses the global RNG).
+	for i in range(shuffled.size() - 1, 0, -1):
+		var j: int = rng.randi_range(0, i)
+		var tmp = shuffled[i]
+		shuffled[i] = shuffled[j]
+		shuffled[j] = tmp
+	_item_rando_map = {}
+	for i in pool.size():
+		_item_rando_map[pool[i]] = shuffled[i]
+	_item_rando_map_seed = ap_seed
+	ModLoaderLog.info("Item rando: built global map for seed '%s' (%d items)." % [ap_seed, pool.size()], LOG_NAME)
+	return _item_rando_map
+
+func _item_rando_swap(item: InteractData, new_id) -> void:
+	if not is_instance_valid(item) or not item.is_inside_tree():
+		return
+	var scene: PackedScene = ItemTacker.item_list_data.get(new_id, null)
+	if scene == null:
+		return
+	var replacement: InteractData = scene.instantiate()
+	if replacement == null:
+		return
+	var parent: Node = item.get_parent()
+	var xform: Transform3D = item.global_transform
+	var was_frozen: bool = item.freeze
+	parent.add_child(replacement)
+	replacement.global_transform = xform
+	replacement.freeze = was_frozen
+	ModLoaderLog.info(
+		"Item rando: %s spawn replaced with %s." % [
+			item_tracker.item_id.keys()[item.obj_id],
+			item_tracker.item_id.keys()[new_id]
+		],
+		LOG_NAME
+	)
+	item.queue_free()
 
 # =============================================================================
 # Title screen replacement
