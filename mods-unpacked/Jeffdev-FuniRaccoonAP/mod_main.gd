@@ -1,7 +1,7 @@
 extends Node
 
 const MOD_NAME = "Jeffdev-FuniRaccoonAP"
-const MOD_VERSION = "1.6.1"
+const MOD_VERSION = "1.7.0"
 const LOG_NAME = MOD_NAME + "/mod_main"
 const CONFIG_PATH = "user://ap_connect.json"
 
@@ -29,8 +29,33 @@ var _color_randomized_this_transition: bool = false
 var _title_text_tex: Texture2D
 var _title_text_no_bg_tex: Texture2D
 
+func _load_item_scene(item_id) -> PackedScene:
+	if not ItemTacker.item_list_data.has(item_id):
+		return null
+	var entry = ItemTacker.item_list_data[item_id]
+	if entry is PackedScene:
+		return entry
+	if entry is String:
+		if entry.is_empty():
+			return null
+		var res = load(entry)
+		if res is PackedScene:
+			return res
+	return null
+
+func _instantiate_item(item_id) -> InteractData:
+	var packed: PackedScene = _load_item_scene(item_id)
+	if packed == null:
+		return null
+	var inst = packed.instantiate()
+	if inst is InteractData:
+		return inst
+	if inst != null:
+		inst.queue_free()
+	return null
+
 # =============================================================================
-# Lifecycle
+# Startup things
 # =============================================================================
 
 func _init() -> void:
@@ -200,7 +225,7 @@ func _on_node_added(node: Node) -> void:
 						continue
 					if not ItemTacker.item_list_data.has(item_id):
 						continue
-					var item_inst: InteractData = ItemTacker.item_list_data[item_id].instantiate()
+					var item_inst: InteractData = _instantiate_item(item_id)
 					if item_inst == null:
 						continue
 					item_inst.global_position = node.global_position
@@ -972,7 +997,9 @@ func _ap_rebuild_objectives_list(node: Node) -> void:
 		# Only list items that are actual AP checks; skip non-randomized level items.
 		if not ap_client.ITEM_ID_TO_AP_LOCATION.has(item_id):
 			continue
-		var item_inst: InteractData = ItemTacker.item_list_data[item_id].instantiate()
+		var item_inst: InteractData = _instantiate_item(item_id)
+		if item_inst == null:
+			continue
 		if item_inst.item_list_ignore:
 			item_inst.queue_free()
 			continue
@@ -1058,9 +1085,10 @@ func _ap_fix_items_left_counter(node: Node) -> void:
 					# Non-check item: hide its icon so the grid only shows checks.
 					icon.visible = false
 				elif icon.has_method("set_val"):
-					var item_inst: InteractData = ItemTacker.item_list_data[item_id].instantiate()
-					icon.set_val(item_inst.hud_icon, Globals.save_file.items_found.has(item_id), ap_stored.has(item_id))
-					item_inst.queue_free()
+					var item_inst: InteractData = _instantiate_item(item_id)
+					if item_inst != null:
+						icon.set_val(item_inst.hud_icon, Globals.save_file.items_found.has(item_id), ap_stored.has(item_id))
+						item_inst.queue_free()
 		grid_idx += 1
 
 # Shop signs idle on frame 0 of their spin sheet; show the AP sign image while a
