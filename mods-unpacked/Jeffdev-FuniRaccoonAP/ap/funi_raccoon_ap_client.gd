@@ -116,6 +116,22 @@ const JEWEL_LOCATION_IDS: Dictionary = {
 	"jewel_4_eaten": 7004,
 }
 
+const VEHICLE_LOCATION_IDS: Dictionary = {
+	2: 9002, # Fork Vehicle
+	3: 9002, # Tony Vehicle
+	4: 9003, # Horse
+}
+
+## AP item id -> SaveGame.vehicles value. 5 is the trolley, which the mod adds
+## to the selector itself (SaveGame.vehicles stops at HORSE = 4).
+const VEHICLE_AP_ITEM_IDS: Dictionary = {
+	900: 1, # Scooter
+	901: 2, # Tony
+	902: 3, # Fork
+	903: 4, # Horse
+	904: 5, # Trolly
+}
+
 ## Maps money.gd money_id strings (str(get_path()) + str(value)) to AP location IDs.
 const EURO_LOCATION_IDS: Dictionary = {
 	# Norwich (scene root: GymDay)
@@ -153,7 +169,6 @@ const EURO_LOCATION_IDS: Dictionary = {
 	"/root/City/Bellboyevent/money9/money5":          8024, # City: Euro near cheese wheel
 	# Blimbo Village (scene root: Blimbo)
 	"/root/Blimbo/money2/money25":                    8025, # Village: Euro on castle
-	"/root/Blimbo/money/money1":                      8026, # Village: Euro near furnace
 	# Desert Connections / Wastes (scene root: MeshInstance3D)
 	"/root/MeshInstance3D/moneys/money/money1":       8027, # Wastes: Euro on top of breakfast building
 	"/root/MeshInstance3D/moneys/money2/money1":      8028, # Wastes: Euro on top of chinese building
@@ -226,6 +241,7 @@ const ITEM_ID_TO_AP_LOCATION: Dictionary = {
 	item_tracker.item_id.GOO:                      LOCATION_ID_BASE + 56,
 	item_tracker.item_id.BEENIE:                   LOCATION_ID_BASE + 57,
 	item_tracker.item_id.FAN:                      LOCATION_ID_BASE + 59,
+	item_tracker.item_id.BEENIE_FACTORY_SIGN:      LOCATION_ID_BASE + 60,
 	item_tracker.item_id.LETTER_B:                 LOCATION_ID_BASE + 61,
 	item_tracker.item_id.BEENIE_STATUE:            LOCATION_ID_BASE + 62,
 	item_tracker.item_id.CANDLE:                   LOCATION_ID_BASE + 63,
@@ -340,6 +356,11 @@ const ITEM_ID_TO_AP_LOCATION: Dictionary = {
 	item_tracker.item_id.DOGGY:                    LOCATION_ID_BASE + 178,
 	item_tracker.item_id.HINTBLO:            	  LOCATION_ID_BASE + 179,
 	item_tracker.item_id.FUNI_RACCOON:            LOCATION_ID_BASE + 180,
+	item_tracker.item_id.TONY_ENGINE: 			  LOCATION_ID_BASE + 181,
+	item_tracker.item_id.OUTDOOR_CHAIR: 		  LOCATION_ID_BASE + 182,
+	item_tracker.item_id.LIGHTNING_ROD:           LOCATION_ID_BASE + 183,
+	item_tracker.item_id.ROBIN:                   LOCATION_ID_BASE + 184,
+	185:                                          LOCATION_ID_BASE + 185, # Gacha, this item id is forced in manually
 
 }
 
@@ -647,6 +668,17 @@ func _on_received_items(command: Dictionary) -> void:
 			if not received_jewels.has(ap_item_id):
 				received_jewels.append(ap_item_id)
 				Globals.save_file.set_meta("ap_received_jewels", received_jewels)
+		elif VEHICLE_AP_ITEM_IDS.has(ap_item_id):
+			var vehicle_id: int = VEHICLE_AP_ITEM_IDS[ap_item_id]
+			if not Globals.save_file.unlocked_vehicles.has(vehicle_id):
+				Globals.save_file.unlocked_vehicles.append(vehicle_id)
+				changed = true
+				ModLoaderLog.info("AP granted vehicle=%d." % vehicle_id, _LOG)
+				_show_popup(item_name, "Vehicle", items[i], show_popup)
+			var received_vehicles: Array = Globals.save_file.get_meta("ap_received_vehicles", [])
+			if not received_vehicles.has(vehicle_id):
+				received_vehicles.append(vehicle_id)
+				Globals.save_file.set_meta("ap_received_vehicles", received_vehicles)
 		elif ap_item_id == EURO_10_AP_ITEM_ID:
 			Globals.add_euro(10.0)
 			changed = true
@@ -831,6 +863,8 @@ func sync_stored_items() -> void:
 	_sync_checks("ap_checked_hats")
 	_sync_checks("ap_checked_jewels")
 	_sync_checks("ap_checked_euros")
+	_sync_checks("ap_checked_vehicles")
+	_sync_checks("ap_checked_speedway")
 
 func dumbbell_eaten(collectable_id: String) -> void:
 	if not DUMBBELL_LOCATION_IDS.has(collectable_id):
@@ -898,6 +932,14 @@ func jewel_collected(jewel_flag: String) -> void:
 		return
 	ModLoaderLog.info("Jewel collected: flag='%s' location_id=%d" % [jewel_flag, location_id], _LOG)
 	_send_check("ap_checked_jewels", location_id)
+
+func vehicle_unlocked(vehicle: int) -> void:
+	var location_id: int = VEHICLE_LOCATION_IDS.get(vehicle, 0)
+	if location_id == 0:
+		ModLoaderLog.warning("vehicle_unlocked: no AP location for vehicle=%d" % vehicle, _LOG)
+		return
+	ModLoaderLog.info("Vehicle unlocked: vehicle=%d location_id=%d" % [vehicle, location_id], _LOG)
+	_send_check("ap_checked_vehicles", location_id)
 
 func euro_collected(money_id: String) -> void:
 	var location_id: int = EURO_LOCATION_IDS.get(money_id, 0)

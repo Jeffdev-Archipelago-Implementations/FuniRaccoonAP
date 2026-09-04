@@ -20,6 +20,19 @@ const BLACKOUT_ITEMS: Array = [
 	item_tracker.item_id.FRIDGE_KEY,
 ]
 
+# Scenes the mod has to reach for by uid, because the game never names them.
+const GACHA_MACHINE_SCENE_PATH := "res://Scene/Objects/GachaMachine/gacha_machine.tscn"
+const GACHA_MACHINE_SCENE_UID := "uid://bevwwjw1owksw"
+const TROLLEY_VEHICLE_SCENE_UID := "uid://b4skd2o7aix7d"
+
+# Ids the game has no enum entry for: item_tracker.item_id stops at ROBIN = 184 and
+# SaveGame.vehicles stops at HORSE = 4, so the mod assigns these itself.
+const GACHA_MACHINE_ITEM_ID := 185
+const TROLLEY_VEHICLE_ID := 5
+const TROLLEY_LOGO_UID := "uid://cads36fss47rk"
+const TROLLEY_MENU_SCALE := 0.75
+const TROLLEY_MENU_LIFT := 0.50
+
 var ap_websocket_connection
 var ap_client
 var connect_panel
@@ -53,6 +66,27 @@ func _instantiate_item(item_id) -> InteractData:
 	if inst != null:
 		inst.queue_free()
 	return null
+
+func _register_gacha_machine_item() -> void:
+	var item_id: int = GACHA_MACHINE_ITEM_ID
+	if ItemTacker.item_list_data.has(item_id):
+		return
+	# item_list_data is typed Dictionary[item_id, String], so this must be the uid
+	ItemTacker.item_list_data[item_id] = GACHA_MACHINE_SCENE_UID
+	ModLoaderLog.info("Registered gacha machine with ItemTacker as id %d." % item_id, LOG_NAME)
+
+func _hide_vehicles(vehicles: Array) -> Array:
+	var owned: Array = []
+	for vehicle in vehicles:
+		if Globals.save_file.unlocked_vehicles.has(vehicle):
+			owned.append(vehicle)
+			Globals.save_file.unlocked_vehicles.erase(vehicle)
+	return owned
+
+func _restore_vehicles(owned: Array) -> void:
+	for vehicle in owned:
+		if not Globals.save_file.unlocked_vehicles.has(vehicle):
+			Globals.save_file.unlocked_vehicles.append(vehicle)
 
 # =============================================================================
 # Startup things
@@ -91,6 +125,8 @@ func _ready() -> void:
 	}
 	ap_client = FuniRaccoonApClientScript.new(ap_websocket_connection, client_config)
 	add_child(ap_client)
+
+	_register_gacha_machine_item()
 
 	ModLoaderLog.success("AP client ready v%s" % MOD_VERSION, LOG_NAME)
 	var ApChatPopupScript = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
@@ -596,6 +632,69 @@ func _on_node_added(node: Node) -> void:
 						ap_client.speedway_completed()
 				)
 			)
+
+	# --- Repeatable quests ---
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/hatstore/toastie_safety_zone.gd":
+		Globals.save_file.states_occurred.erase(flag_names.toastie_saved_hat)
+
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/OldBuilding/path_3d.gd":
+		var owned_dilemma: Array = _hide_vehicles([SaveGame.vehicles.TONY, SaveGame.vehicles.FORKLIFT])
+		node.ready.connect(func():
+			_restore_vehicles(owned_dilemma)
+			if is_instance_valid(node.mikk_dialogue):
+				node.mikk_dialogue.dialogue_closed.disconnect(node.unlock_vehicle)
+				node.mikk_dialogue.dialogue_closed.connect(func():
+					if node.robin_dead:
+						ap_client.vehicle_unlocked(SaveGame.vehicles.FORKLIFT)
+				)
+			if is_instance_valid(node.robin_dialogue):
+				node.robin_dialogue.dialogue_closed.disconnect(node.unlock_tony)
+				node.robin_dialogue.dialogue_closed.connect(func():
+					if node.mikk_dead:
+						ap_client.vehicle_unlocked(SaveGame.vehicles.TONY)
+				)
+		)
+
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/petrol_station/area_3d_horse.gd":
+		var owned_horse: Array = _hide_vehicles([node.current])
+		node.ready.connect(func():
+			_restore_vehicles(owned_horse)
+			node.body_entered.disconnect(node.unlock_vehicle)
+			node.body_entered.connect(func(_player):
+				ap_client.vehicle_unlocked(node.current)
+				node.queue_free()
+			)
+		)
+
+	# Prevent credits from giving Tony
+	if node.get_script() != null:
+		var credits_path: String = node.get_script().resource_path
+		if credits_path == "res://Scene/Levels/Credits/credits_spawner.gd" or credits_path == "res://Scene/Levels/ending_hypercube/end_credits.gd":
+			var had_tony: bool = Globals.save_file.unlocked_vehicles.has(SaveGame.vehicles.TONY)
+			node.tree_exiting.connect(func():
+				if had_tony or not Globals.save_file.unlocked_vehicles.has(SaveGame.vehicles.TONY):
+					return
+				# The credits already saved with TONY in it, so rewrite the save too.
+				Globals.save_file.unlocked_vehicles.erase(SaveGame.vehicles.TONY)
+				Globals.save_game()
+			)
+
+	# --- Gacha and Trolly handling ---
+
+	if node.scene_file_path == GACHA_MACHINE_SCENE_PATH:
+		if node is InteractData:
+			node.obj_id = GACHA_MACHINE_ITEM_ID
+		else:
+			ModLoaderLog.warning("Gacha machine root is %s, not InteractData; its check will never send." % node.get_class(), LOG_NAME)
+
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/petrol_station/change_vehicle.gd":
+		if not node.vehicles.has(TROLLEY_VEHICLE_ID):
+			node.vehicles[TROLLEY_VEHICLE_ID] = load(TROLLEY_VEHICLE_SCENE_UID)
+
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Menus/car_menu.gd":
+		node.ready.connect(func():
+			_add_trolley_to_car_menu(node)
+		, CONNECT_ONE_SHOT)
 
 	# --- Goals ---
 
@@ -1159,3 +1258,87 @@ func _log_cluster_levels(cluster_id) -> void:
 			LOG_NAME
 		)
 	ModLoaderLog.info("=== end cluster %s level list ===" % str(cluster_id), LOG_NAME)
+
+# Build the trolley's entry in the vehicle selector
+func _add_trolley_to_car_menu(menu: Node) -> void:
+	var trolley_id: int = TROLLEY_VEHICLE_ID
+	if menu.vehicles.has(trolley_id):
+		return
+	var spin: Node3D = menu.get_node_or_null("vehicleContainer/Spin")
+	if spin == null:
+		ModLoaderLog.warning("Car menu has no vehicleContainer/Spin; skipping trolley.", LOG_NAME)
+		return
+
+	var source: Node = (load(TROLLEY_VEHICLE_SCENE_UID) as PackedScene).instantiate()
+	var model: Node3D = source.get_node_or_null("Vehicle/kei_truck_new/body/trolly")
+	if model == null:
+		ModLoaderLog.warning("Trolley scene has no body/trolly mesh; skipping trolley.", LOG_NAME)
+		source.free()
+		return
+
+	var rider: Node = model.get_node_or_null("RaccoonMesh")
+	if rider != null:
+		model.remove_child(rider)
+		rider.free()
+
+	model.get_parent().remove_child(model)
+	source.free()
+
+	model.name = "trolly"
+	model.transform = Transform3D.IDENTITY
+	spin.add_child(model)
+
+	var reference: Node3D = menu.vehicles.get(SaveGame.vehicles.KEI_TRUCK)
+	var layers: int = 0
+	for vis in _visual_instances(reference):
+		layers = vis.layers
+		break
+	if layers != 0:
+		for vis in _visual_instances(model):
+			vis.layers = layers
+	else:
+		ModLoaderLog.warning("Could not read the car menu's render layer; trolley may be invisible.", LOG_NAME)
+
+	if reference != null:
+		var want: AABB = _visual_bounds(reference, spin)
+		var got: AABB = _visual_bounds(model, spin)
+		var want_span: float = maxf(want.size.x, maxf(want.size.y, want.size.z))
+		var got_span: float = maxf(got.size.x, maxf(got.size.y, got.size.z))
+		if got_span > 0.0 and want_span > 0.0:
+			var k: float = (want_span / got_span) * TROLLEY_MENU_SCALE
+			var origin: Vector3 = want.get_center() - got.get_center() * k
+			origin.y += got.size.y * k * TROLLEY_MENU_LIFT
+			model.transform = Transform3D(Basis().scaled(Vector3.ONE * k), origin)
+
+	model.hide()
+	menu.vehicles[trolley_id] = model
+
+	var data := car_resource.new()
+	data.car_dialogue = "[shake]THE VEHICLE NOT AVAILABLE IN THE BASE GAME\nA FULL BLOWN ARCHIPELAGO EXCLUSIVE!!!![/shake]"
+	data.car_logo = load(TROLLEY_LOGO_UID)
+	menu.vehicle_data[trolley_id] = data
+	ModLoaderLog.info("Added the trolley to the vehicle selector as id %d." % trolley_id, LOG_NAME)
+
+func _visual_instances(root: Node) -> Array:
+	var found: Array = []
+	if root == null:
+		return found
+	var stack: Array = [root]
+	while not stack.is_empty():
+		var current: Node = stack.pop_back()
+		for child in current.get_children():
+			stack.push_back(child)
+		if current is VisualInstance3D:
+			found.append(current)
+	return found
+
+# Combined bounds of every mesh under `node`, in `space`'s local frame.
+func _visual_bounds(node: Node3D, space: Node3D) -> AABB:
+	var to_space: Transform3D = space.global_transform.affine_inverse()
+	var bounds: AABB = AABB()
+	var found: bool = false
+	for vis in _visual_instances(node):
+		var box: AABB = (to_space * vis.global_transform) * vis.get_aabb()
+		bounds = box if not found else bounds.merge(box)
+		found = true
+	return bounds

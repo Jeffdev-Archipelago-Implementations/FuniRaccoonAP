@@ -90,6 +90,20 @@ func _input(event: InputEvent) -> void:
 			var chk_jewel := func(label: String, ap_item_id: int) -> String:
 				var has_it: bool = received_jewels.has(ap_item_id)
 				return "[color=%s]%s %s[/color]" % ["#00FF7F" if has_it else "#EE0000", "✓" if has_it else "✗", label]
+			var rods := func() -> String:
+				var parts: PackedStringArray = []
+				for pair in [
+					["Base", item_tracker.item_id.COOLING_ROD],
+					["Plimbo", item_tracker.item_id.COOLING_ROD_PLIMBO],
+					["King", item_tracker.item_id.COOLING_ROD_FRIDGE_KING],
+				]:
+					parts.append(chk.call(pair[0], pair[1]))
+				return "Rods: " + " ".join(parts)
+			var gems := func() -> String:
+				var parts: PackedStringArray = []
+				for pair in [["Green", 601], ["Blue", 602], ["Purple", 603], ["Red", 604]]:
+					parts.append(chk_jewel.call(pair[0], pair[1]))
+				return "Gems: " + " ".join(parts)
 			var msg := "[color=#FAFAD2]Goals (all required to win)[/color]\n"
 			for goal in required_goals:
 				var done: bool = _ap_client.is_goal_completed(goal)
@@ -99,28 +113,19 @@ func _input(event: InputEvent) -> void:
 					"orb":
 						msg += "\n[color=%s]Orb%s[/color] - %d/%d items\n" % [header_color, done_mark, count, goal_threshold]
 						msg += chk.call("Orb", item_tracker.item_id.ORB) + "\n"
-						msg += chk.call("Cooling Rod", item_tracker.item_id.COOLING_ROD) + "\n"
-						msg += chk.call("Cooling Rod (Plimbo)", item_tracker.item_id.COOLING_ROD_PLIMBO) + "\n"
-						msg += chk.call("Cooling Rod (Fridge King)", item_tracker.item_id.COOLING_ROD_FRIDGE_KING)
+						msg += rods.call()
 					"museum":
 						msg += "\n[color=%s]Museum%s[/color] - %d/100 items\n" % [header_color, done_mark, count]
 						msg += chk.call("Waffle", item_tracker.item_id.WAFFLE) + "\n"
-						msg += chk.call("Cooling Rod", item_tracker.item_id.COOLING_ROD) + "\n"
-						msg += chk.call("Cooling Rod (Plimbo)", item_tracker.item_id.COOLING_ROD_PLIMBO) + "\n"
-						msg += chk.call("Cooling Rod (Fridge King)", item_tracker.item_id.COOLING_ROD_FRIDGE_KING)
+						msg += rods.call()
 					"fellowship":
 						msg += "\n[color=%s]Fellowship%s[/color] - %d/%d items\n" % [header_color, done_mark, count, goal_threshold]
 						msg += chk.call("Priestess", item_tracker.item_id.PRIESTESS) + "\n"
 						msg += chk.call("Greenie", item_tracker.item_id.GREENIE) + "\n"
-						msg += chk.call("Cooling Rod", item_tracker.item_id.COOLING_ROD) + "\n"
-						msg += chk.call("Cooling Rod (Plimbo)", item_tracker.item_id.COOLING_ROD_PLIMBO) + "\n"
-						msg += chk.call("Cooling Rod (Fridge King)", item_tracker.item_id.COOLING_ROD_FRIDGE_KING)
+						msg += rods.call()
 					"lugh":
 						msg += "\n[color=%s]Lugh%s[/color] - %d/%d items\n" % [header_color, done_mark, count, goal_threshold]
-						msg += chk_jewel.call("Mystical Gem (Green)", 601) + "\n"
-						msg += chk_jewel.call("Mystical Gem (Blue)", 602) + "\n"
-						msg += chk_jewel.call("Mystical Gem (Purple)", 603) + "\n"
-						msg += chk_jewel.call("Mystical Gem (Red)", 604)
+						msg += gems.call()
 					_:
 						msg += "\n[color=%s]%s%s[/color]" % [header_color, str(goal), done_mark]
 			show_message(msg, get_tree().get_root())
@@ -164,10 +169,14 @@ static func _create_manager(root: Node) -> void:
 	_vbox = VBoxContainer.new()
 	_vbox.alignment = BoxContainer.ALIGNMENT_END
 	_vbox.add_theme_constant_override("separation", 3)
-	_vbox.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	# Span the full height of the viewport rather than a fixed band above the bottom.
+	# ALIGNMENT_END still keeps messages pinned to the bottom, so short ones look
+	# unchanged, but a tall one (the F2 goal readout with several goals selected) has
+	# the whole screen to grow into instead of overflowing out of a 215px box.
+	_vbox.set_anchors_preset(Control.PRESET_LEFT_WIDE)
 	_vbox.offset_left = 20.0
 	_vbox.offset_right = 320.0  # 300px wide
-	_vbox.offset_top = -235.0
+	_vbox.offset_top = 20.0
 	_vbox.offset_bottom = -20.0
 
 	_manager.add_child(_vbox)
