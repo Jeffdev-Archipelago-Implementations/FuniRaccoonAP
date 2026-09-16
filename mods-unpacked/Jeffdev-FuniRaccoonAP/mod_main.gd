@@ -1,7 +1,7 @@
 extends Node
 
 const MOD_NAME = "Jeffdev-FuniRaccoonAP"
-const MOD_VERSION = "1.7.0"
+const MOD_VERSION = "1.7.3"
 const LOG_NAME = MOD_NAME + "/mod_main"
 const CONFIG_PATH = "user://ap_connect.json"
 
@@ -23,6 +23,7 @@ const BLACKOUT_ITEMS: Array = [
 # Scenes the mod has to reach for by uid, because the game never names them.
 const GACHA_MACHINE_SCENE_PATH := "res://Scene/Objects/GachaMachine/gacha_machine.tscn"
 const GACHA_MACHINE_SCENE_UID := "uid://bevwwjw1owksw"
+const GACHA_MACHINE_SCRIPT_PATH := "res://Scene/Objects/GachaMachine/gachaMAchine.gd"
 const TROLLEY_VEHICLE_SCENE_UID := "uid://b4skd2o7aix7d"
 
 # Ids the game has no enum entry for: item_tracker.item_id stops at ROBIN = 184 and
@@ -30,6 +31,7 @@ const TROLLEY_VEHICLE_SCENE_UID := "uid://b4skd2o7aix7d"
 const GACHA_MACHINE_ITEM_ID := 185
 const TROLLEY_VEHICLE_ID := 5
 const TROLLEY_LOGO_UID := "uid://cads36fss47rk"
+const ATM_EMPTY_ICON_UID := "uid://vrskrmh6iufb"
 const TROLLEY_MENU_SCALE := 0.75
 const TROLLEY_MENU_LIFT := 0.50
 
@@ -363,63 +365,32 @@ func _on_node_added(node: Node) -> void:
 		node.ready.connect(func():
 			node.object_area_detect.body_entered.disconnect(node._on_object_area_detect_body_entered)
 			node.object_area_detect.body_entered.connect(func(body: InteractData):
-				if body is not InteractData:
-					return
-				if body.obj_id == item_tracker.item_id.KEI_TRUCK:
-					return
-				if LevelChanger.current_level.level_id == level_changer.LEVEL_ID.MAIN_MENU:
-					return
-				var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
-				var is_new: bool = not ap_stored.has(body.obj_id)
-				var weight_blocking: bool = ap_client.slot_data.get("options", {}).get("dumpster_weight_blocking", false)
-				if not is_new:
-					body.item_in_dumpster.emit()
-					node.process_item(body, false)
-					return
-				if weight_blocking and float(body.weight) > float(Globals.save_file.strength):
-					ModLoaderLog.info("Dumpster rejected %s: weight %s > strength %s" % [body.obj_id, body.weight, Globals.save_file.strength], LOG_NAME)
-					body.freeze = true
-					body.set_collision_layer_value(3, false)
-					body.set_collision_mask_value(1, false)
-					body.set_collision_mask_value(3, false)
-					body.set_collision_mask_value(4, false)
-					body.set_collision_mask_value(5, false)
-					var t1 = node.create_tween()
-					t1.tween_property(body, "global_position", node.start_point.global_position, 0.1)
-					await t1.finished
-					if not is_instance_valid(body) or not is_instance_valid(node):
-						return
-					var t2 = node.create_tween()
-					t2.tween_property(body, "global_position", node.end_point.global_position, 0.1)
-					await t2.finished
-					if not is_instance_valid(body) or not is_instance_valid(node):
-						return
-					node.animation_player.play("stuff_added")
-					node.play_random_sounds()
-					body.hide()
-					await node.animation_player.animation_finished
-					if not is_instance_valid(body) or not is_instance_valid(node):
-						return
-					body.freeze = false
-					body.show()
-					body.global_position = node.end_point.global_position
-					body.apply_central_impulse((node.get_transform().basis.z * -node.dupes_forward_force) + node.dupes_directions)
-					EffectsSpawner.spawn_explosion(node.global_position + Vector3.UP * 4)
-					node.TEXT_SPAWN_DUPE(Vector3(0, 6, 0), "TOO HEAVY!")
-					await node.get_tree().create_timer(1).timeout
-					if not is_instance_valid(body) or not is_instance_valid(node):
-						return
-					body.set_collision_layer_value(3, true)
-					body.set_collision_mask_value(1, true)
-					body.set_collision_mask_value(3, true)
-					body.set_collision_mask_value(4, true)
-					body.set_collision_mask_value(5, true)
-					return
-				body.item_in_dumpster.emit()
-				ap_client.item_stored(body.obj_id)
-				node.process_item(body, true)
+				_dumpster_handling(node, body)
 			)
 		)
+
+	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/ending_hypercube/dumpster_special_ending.gd":
+		node.ready.connect(func():
+			node.object_area_detect.body_entered.disconnect(node._on_object_area_detect_body_entered)
+			node.object_area_detect.body_entered.connect(func(body: InteractData):
+				_dumpster_handling(node, body)
+			)
+		)
+
+	# WHO DECIDED THIS WAS A GOOD IDEA I WILL FIND YOU, WHY IS THIS IN SOUND EFFECTS
+	if node.get_script() != null and node.get_script().resource_path == "res://Audio/SoundEffects/dumpster/check_players_hands.gd":
+		node.set_script(null)
+		node.ready.connect(func():
+			if Globals.player_inst == null or Globals.player_inst.pickup_pivot == null:
+				return
+			for item in Globals.player_inst.pickup_pivot.get_objects_in_hand():
+				if item is not InteractData:
+					continue
+				if item.obj_id == item_tracker.item_id.KEI_TRUCK:
+					continue
+				ModLoaderLog.info("Intercepting %s item to add to ap stored items." % item_tracker.item_id.keys()[item.obj_id], LOG_NAME)
+				ap_client.item_stored(item.obj_id)
+		, CONNECT_ONE_SHOT)
 
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/keiTruck/stunt_tracker.gd":
 		node.ready.connect(func():
@@ -687,6 +658,17 @@ func _on_node_added(node: Node) -> void:
 		else:
 			ModLoaderLog.warning("Gacha machine root is %s, not InteractData; its check will never send." % node.get_class(), LOG_NAME)
 
+	if node.get_script() != null and node.get_script().resource_path == GACHA_MACHINE_SCRIPT_PATH:
+		node.ready.connect(func():
+			var machine: Node = node.get_parent()
+			if not is_instance_valid(machine) or not machine.has_signal("use_signal"):
+				ModLoaderLog.warning("Gacha machine has no use_signal; leaving its shoot() alone.", LOG_NAME)
+				return
+			if machine.use_signal.is_connected(node._on_gacha_machine_use_signal):
+				machine.use_signal.disconnect(node._on_gacha_machine_use_signal)
+			machine.use_signal.connect(func(_player): _gacha_vending_anim(node))
+		, CONNECT_ONE_SHOT)
+
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Levels/petrol_station/change_vehicle.gd":
 		if not node.vehicles.has(TROLLEY_VEHICLE_ID):
 			node.vehicles[TROLLEY_VEHICLE_ID] = load(TROLLEY_VEHICLE_SCENE_UID)
@@ -713,18 +695,16 @@ func _on_node_added(node: Node) -> void:
 			for child in node.get_children():
 				if child.get_script() == null or child.get_script().resource_path != "res://Scene/Levels/museum/item_museum.gd":
 					continue
-				if child.item == null:
+				if not is_instance_valid(child.item) or not is_instance_valid(child.interact_area):
 					continue
-				var obj_id = child.item.obj_id
-				if Globals.save_file.items_stored.has(obj_id) and not ap_stored.has(obj_id):
-					# AP-received but not player-thrown: hide from museum
-					for spawn_child in child.get_node("spawn").get_children():
-						spawn_child.queue_free()
-					if is_instance_valid(child.interact_area):
-						child.interact_area.queue_free()
-				elif ap_stored.has(obj_id) and not Globals.save_file.items_stored.has(obj_id):
-					child.get_node("spawn").add_child(child.item)
-					child.item.position.y = child.item.height / 2
+				var displayed: bool = child.item.get_parent() != null
+				if displayed == ap_stored.has(child.item.obj_id):
+					continue
+				if displayed:
+					child.item.queue_free()
+					child.interact_area.queue_free()
+				else:
+					_museum_display_piece(child)
 		)
 
 	# --- Block items/actions until received from AP ---
@@ -776,21 +756,12 @@ func _on_node_added(node: Node) -> void:
 			)
 		)
 
-	# ATM: only show items the player has thrown into the dumpster for checks; blocked entirely in the future
+	# ATM: only offer items the player has thrown into the dumpster for checks
 	if node.get_script() != null and node.get_script().resource_path == "res://Scene/Objects/atm/ATMLogic.gd":
 		node.ready.connect(func():
 			node.interact_area.interacted.disconnect(node.show_atm_interface)
 			node.interact_area.interacted.connect(func(player: PlayerScript):
-				var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
-				var original: Array = Globals.save_file.items_stored.duplicate()
-				Globals.save_file.items_stored.clear()
-				for id in ap_stored:
-					if original.has(id):
-						Globals.save_file.items_stored.append(id)
-				await node.show_atm_interface(player)
-				Globals.save_file.items_stored.clear()
-				for id in original:
-					Globals.save_file.items_stored.append(id)
+				_atm_show_interface(node, player)
 			)
 		)
 
@@ -885,6 +856,155 @@ func _on_node_added(node: Node) -> void:
 				node.change_player_gravity(player)
 			)
 		)
+
+
+func _museum_display_piece(piece: Node) -> void:
+	var area: InteractArea = piece.interact_area.duplicate()
+	piece.add_child(area)
+	piece.interact_area = area
+	area.interacted.connect(piece.dialogue_interact.dialogue_activate)
+	area.exited.connect(piece.dialogue_interact.dialogue_remove)
+
+	piece.item = load(piece.item_uid).instantiate()
+	piece.stop_evil_items()
+	piece.spawn.add_child(piece.item)
+	piece.item.position.y = piece.item.height / 2
+
+func _atm_show_interface(atm: Node, player: PlayerScript) -> void:
+	if not atm.is_ready:
+		return
+	player.pause_player(true)
+	if not Globals.save_file.states_occurred.has("has_payed_intro"):
+		atm.animation_player.play("first_time_intro")
+		await atm.animation_player.animation_finished
+		Globals.save_file.states_occurred.append("has_payed_intro")
+
+	_atm_all_items(atm)
+	MenuController.menu_enabled_state(false)
+	atm.animation_player.play("intro")
+
+	atm.item_list.item_activated.connect(atm.selected_item)
+	atm.item_list.grab_focus()
+
+	atm.canvas_layer.set_visible(true)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	await atm.animation_player.animation_finished
+	atm.level_music.stop()
+	atm.selection_music.play()
+
+func _atm_all_items(atm: Node) -> void:
+	var empty_icon: Texture2D = load(ATM_EMPTY_ICON_UID)
+	atm.item_list.clear()
+
+	for i in range(10):
+		atm.item_list.add_item("", empty_icon, false)
+
+	for item_id in Globals.save_file.get_meta("ap_stored_items", []):
+		var item: InteractData = _instantiate_item(item_id)
+		if item == null:
+			continue
+		atm.item_list.add_item(item.obj_name, item.hud_icon)
+		item.queue_free()
+
+	atm.item_list.sort_items_by_text()
+
+	await get_tree().create_timer(0.1).timeout
+	if not is_instance_valid(atm):
+		return
+
+	atm.item_list.get_v_scroll_bar().ratio = 0.5
+
+	for i in range(10):
+		atm.item_list.add_item("", empty_icon, false)
+
+func _gacha_vending_anim(gacha: Node) -> void:
+	gacha.animation_player.play("spin")
+	gacha.audio_stream_player_3d.play()
+
+	await gacha.audio_stream_player_3d.finished
+	if not is_instance_valid(gacha):
+		return
+
+	gacha.animation_player.play("shoot")
+	EffectsSpawner.spawn_explosion(gacha.global_position, 0, 5, 0.5)
+
+	_gacha_shoot(gacha)
+	gacha.coins += 1
+	gacha.in_progress = false
+
+func _gacha_shoot(gacha: Node) -> void:
+	var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
+	if ap_stored.is_empty():
+		return
+	var proj_inst: InteractData = _instantiate_item(ap_stored.pick_random())
+	if proj_inst == null:
+		return
+	proj_inst.position = gacha.pivotlaunch.global_position
+
+	if proj_inst is RigidBody3D:
+		proj_inst.apply_central_impulse(gacha.pivotlaunch.get_global_transform().basis.x * gacha.speed)
+		proj_inst.freeze = false
+	Globals.get_current_world().add_child(proj_inst)
+
+func _dumpster_handling(node: Node, body: InteractData) -> void:
+	if body is not InteractData:
+		return
+	if body.obj_id == item_tracker.item_id.KEI_TRUCK:
+		return
+	if LevelChanger.current_level.level_id == level_changer.LEVEL_ID.MAIN_MENU:
+		return
+	var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
+	var is_new: bool = not ap_stored.has(body.obj_id)
+	var weight_blocking: bool = ap_client.slot_data.get("options", {}).get("dumpster_weight_blocking", false)
+	if not is_new:
+		body.item_in_dumpster.emit()
+		node.process_item(body, false)
+		return
+	if weight_blocking and float(body.weight) > float(Globals.save_file.strength):
+		ModLoaderLog.info("Dumpster rejected %s: weight %s > strength %s" % [body.obj_id, body.weight, Globals.save_file.strength], LOG_NAME)
+		body.freeze = true
+		body.set_collision_layer_value(3, false)
+		body.set_collision_mask_value(1, false)
+		body.set_collision_mask_value(3, false)
+		body.set_collision_mask_value(4, false)
+		body.set_collision_mask_value(5, false)
+		var t1 = node.create_tween()
+		t1.tween_property(body, "global_position", node.start_point.global_position, 0.1)
+		await t1.finished
+		if not is_instance_valid(body) or not is_instance_valid(node):
+			return
+		var t2 = node.create_tween()
+		t2.tween_property(body, "global_position", node.end_point.global_position, 0.1)
+		await t2.finished
+		if not is_instance_valid(body) or not is_instance_valid(node):
+			return
+		node.animation_player.play("stuff_added")
+		node.play_random_sounds()
+		body.hide()
+		await node.animation_player.animation_finished
+		if not is_instance_valid(body) or not is_instance_valid(node):
+			return
+		body.freeze = false
+		body.show()
+		body.global_position = node.end_point.global_position
+		body.apply_central_impulse((node.get_transform().basis.z * -node.dupes_forward_force) + node.dupes_directions)
+		EffectsSpawner.spawn_explosion(node.global_position + Vector3.UP * 4)
+		if node.has_method("TEXT_SPAWN_DUPE"):
+			node.TEXT_SPAWN_DUPE(Vector3(0, 6, 0), "TOO HEAVY!")
+		else:
+			node.TEXT_SPAWN(Vector3(0, 3.5, 0), "TOO HEAVY!")
+		await node.get_tree().create_timer(1).timeout
+		if not is_instance_valid(body) or not is_instance_valid(node):
+			return
+		body.set_collision_layer_value(3, true)
+		body.set_collision_mask_value(1, true)
+		body.set_collision_mask_value(3, true)
+		body.set_collision_mask_value(4, true)
+		body.set_collision_mask_value(5, true)
+		return
+	body.item_in_dumpster.emit()
+	ap_client.item_stored(body.obj_id)
+	node.process_item(body, true)
 
 # =============================================================================
 # Title screen replacement

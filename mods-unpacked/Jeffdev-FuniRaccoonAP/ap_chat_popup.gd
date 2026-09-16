@@ -9,10 +9,10 @@ const MESSAGE_DURATION = 7.5
 const HELP_KEY = KEY_F1
 const TOGGLE_KEY = KEY_F6
 const GOAL_KEY = KEY_F2
-const POPUP_TOGGLE_KEY = KEY_F3
+const POPUP_TOGGLE_KEY = KEY_F5
 const FILTER_KEY = KEY_F4
 
-const HELP_MESSAGE = "Controls: [color=#FAFAD2]F1[/color]: Help | [color=#FAFAD2]F2[/color]: Goal | [color=#FAFAD2]F3[/color]: Toggle Popups | [color=#FAFAD2]F4[/color]: Filter Messages | [color=#FAFAD2]F6[/color]: Toggle Messages"
+const HELP_MESSAGE = "Controls: [color=#FAFAD2]F1[/color]: Help | [color=#FAFAD2]F2[/color]: Goal | [color=#FAFAD2]F4[/color]: Filter Messages | [color=#FAFAD2]F5[/color]: Toggle Popups | [color=#FAFAD2]F6[/color]: Toggle Messages"
 
 const META_CHAT_VISIBLE = "ap_chat_visible"
 const META_CHAT_RELEVANT_ONLY = "ap_chat_relevant_only"
@@ -169,10 +169,6 @@ static func _create_manager(root: Node) -> void:
 	_vbox = VBoxContainer.new()
 	_vbox.alignment = BoxContainer.ALIGNMENT_END
 	_vbox.add_theme_constant_override("separation", 3)
-	# Span the full height of the viewport rather than a fixed band above the bottom.
-	# ALIGNMENT_END still keeps messages pinned to the bottom, so short ones look
-	# unchanged, but a tall one (the F2 goal readout with several goals selected) has
-	# the whole screen to grow into instead of overflowing out of a 215px box.
 	_vbox.set_anchors_preset(Control.PRESET_LEFT_WIDE)
 	_vbox.offset_left = 20.0
 	_vbox.offset_right = 320.0  # 300px wide
