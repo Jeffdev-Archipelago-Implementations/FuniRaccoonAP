@@ -11,22 +11,23 @@ const TOGGLE_KEY = KEY_F6
 const GOAL_KEY = KEY_F2
 const POPUP_TOGGLE_KEY = KEY_F5
 const FILTER_KEY = KEY_F4
+const MONITOR_SOUND_KEY = KEY_F7
 
-const HELP_MESSAGE = "Controls: [color=#FAFAD2]F1[/color]: Help | [color=#FAFAD2]F2[/color]: Goal | [color=#FAFAD2]F4[/color]: Filter Messages | [color=#FAFAD2]F5[/color]: Toggle Popups | [color=#FAFAD2]F6[/color]: Toggle Messages"
+const HELP_MESSAGE = "Controls: [color=#FAFAD2]F1[/color]: Help | [color=#FAFAD2]F2[/color]: Goal | [color=#FAFAD2]F4[/color]: Filter Messages | [color=#FAFAD2]F5[/color]: Toggle Popups | [color=#FAFAD2]F6[/color]: Toggle Messages | [color=#FAFAD2]F7[/color]: Make The Settings Menu Shut Up"
 
 const META_CHAT_VISIBLE = "ap_chat_visible"
 const META_CHAT_RELEVANT_ONLY = "ap_chat_relevant_only"
 const META_ITEM_POPUPS_ENABLED = "ap_item_popups_enabled"
+const META_MONITOR_SOUND_MUTED = "ap_monitor_sound_muted"
+
+# The CRT startup noise that autoplays on the settings screens.
+const MONITOR_SOUND = "res://Audio/SoundEffects/computer/facuarmo__286-startup.ogg"
 static var _manager: CanvasLayer = null
 static var _vbox: VBoxContainer = null
 static var _messages: Array = []  # Active RichTextLabel nodes
 static var _chat_visible: bool = true
 static var _relevant_only: bool = false
 static var _hiding: bool = false
-static var _ap_client = null
-
-static func set_ap_client(client) -> void:
-	_ap_client = client
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -58,6 +59,15 @@ func _input(event: InputEvent) -> void:
 			if not popup_script._enabled:
 				popup_script.clear_all()
 			show_message("[color=#FAFAD2]Item Popups: %s[/color]" % state, get_tree().get_root())
+		elif event.keycode == MONITOR_SOUND_KEY:
+			var muted: bool = not Globals.save_file.get_meta(META_MONITOR_SOUND_MUTED, false)
+			Globals.save_file.set_meta(META_MONITOR_SOUND_MUTED, muted)
+			Globals.save_game()
+			if muted:
+				for player in get_tree().root.find_children("*", "AudioStreamPlayer", true, false):
+					if is_monitor_sound(player):
+						player.stop()
+			show_message("[color=#FAFAD2]Monitor Sound: %s[/color]" % ("Muted" if muted else "On"), get_tree().get_root())
 		elif event.keycode == FILTER_KEY:
 			_relevant_only = not _relevant_only
 			Globals.save_file.set_meta(META_CHAT_RELEVANT_ONLY, _relevant_only)
@@ -70,19 +80,20 @@ func _input(event: InputEvent) -> void:
 			var filter_state := "Showing Your Messages Only" if _relevant_only else "Showing All Messages"
 			show_message("[color=#FAFAD2]%s[/color]" % filter_state, get_tree().get_root())
 		elif event.keycode == GOAL_KEY:
-			if not is_instance_valid(_ap_client):
+			var ap_client = ModLoader.get_node("Jeffdev-FuniRaccoonAP").ap_client
+			if not is_instance_valid(ap_client):
 				return
 			_clear_messages()
 			if Globals.save_file.get_meta("ap_goal_complete", false):
 				show_message("[color=#00FF7F]GOAL COMPLETE![/color]", get_tree().get_root())
 				return
-			var required_goals: Array = _ap_client.get_required_goals()
+			var required_goals: Array = ap_client.get_required_goals()
 			if required_goals.is_empty():
 				show_message("[color=#FAFAD2]No goals configured.[/color]", get_tree().get_root())
 				return
 			var stored: Array = Globals.save_file.items_stored
 			var count: int = stored.size()
-			var goal_threshold: int = _ap_client.slot_threshold_for(50)
+			var goal_threshold: int = ap_client.slot_threshold_for(50)
 			var chk := func(label: String, item_id) -> String:
 				var has_it: bool = stored.has(item_id)
 				return "[color=%s]%s %s[/color]" % ["#00FF7F" if has_it else "#EE0000", "✓" if has_it else "✗", label]
@@ -106,7 +117,7 @@ func _input(event: InputEvent) -> void:
 				return "Gems: " + " ".join(parts)
 			var msg := "[color=#FAFAD2]Goals (all required to win)[/color]\n"
 			for goal in required_goals:
-				var done: bool = _ap_client.is_goal_completed(goal)
+				var done: bool = ap_client.is_goal_completed(goal)
 				var header_color := "#00FF7F" if done else "#FAFAD2"
 				var done_mark := " [DONE]" if done else ""
 				match goal:
@@ -129,6 +140,10 @@ func _input(event: InputEvent) -> void:
 					_:
 						msg += "\n[color=%s]%s%s[/color]" % [header_color, str(goal), done_mark]
 			show_message(msg, get_tree().get_root())
+
+
+static func is_monitor_sound(node: Node) -> bool:
+	return node is AudioStreamPlayer and node.stream != null and node.stream.resource_path == MONITOR_SOUND
 
 
 static func _clear_messages() -> void:
@@ -213,3 +228,102 @@ static func _add_label(bbcode_text: String, relevant := true) -> void:
 		if is_instance_valid(label):
 			label.queue_free()
 	)
+
+
+# AP PrintJSON messages
+
+const AP_COLORS: Dictionary = {
+	"red":       "#EE0000",
+	"green":     "#00FF7F",
+	"yellow":    "#FAFAD2",
+	"blue":      "#6495ED",
+	"magenta":   "#EE00EE",
+	"cyan":      "#00EEEE",
+	"white":     "#DDDDDD",
+	"black":     "#222222",
+	"slateblue": "#6D8BE8",
+	"salmon":    "#FA8072",
+	"plum":      "#AF99EF",
+}
+
+# Boilerplate server messages shown on connect that we don't want in chat.
+const FILTERED_MESSAGE_SUBSTRINGS: Array = [
+	"does not support compressed",
+	"Now that you are connected",
+]
+
+static func show_print_json(command: Dictionary, client) -> void:
+	var parts: Array = command.get("data", [])
+	if parts.is_empty() or str(command.get("type", "")) == "Tutorial":
+		return
+	var plain := ""
+	for part in parts:
+		plain += str(part.get("text", ""))
+	for needle in FILTERED_MESSAGE_SUBSTRINGS:
+		if plain.contains(needle):
+			return
+	var bbcode := ""
+	for part in parts:
+		bbcode += _format_part(part, client)
+	if bbcode.strip_edges().is_empty():
+		return
+	show_message(bbcode, client.get_tree().get_root(), _is_relevant(command, parts, client.slot))
+
+static func _format_part(part: Dictionary, client) -> String:
+	var text: String = str(part.get("text", ""))
+	if text.is_empty():
+		return ""
+	var part_type: String = str(part.get("type", "text"))
+	var game_name: String = client.get_player_game(int(part.get("player", 0)))
+	match part_type:
+		"player_id":
+			text = client.get_player_name(int(text))
+		"item_id":
+			if client.data_package:
+				var resolved: String = client.data_package.resolve_item(int(text), game_name)
+				if resolved != "":
+					text = resolved
+		"location_id":
+			if client.data_package:
+				var resolved: String = client.data_package.resolve_location(int(text), game_name)
+				if resolved != "":
+					text = resolved
+
+	var color: String = str(part.get("color", ""))
+	if color.is_empty():
+		match part_type:
+			"player_id", "player_name":
+				color = "slateblue"
+			"item_id", "item_name":
+				var flags: int = int(part.get("flags", 0))
+				if flags & 0b001:
+					color = "plum"
+				elif flags & 0b010:
+					color = "slateblue"
+				elif flags & 0b100:
+					color = "salmon"
+				else:
+					color = "cyan"
+			"location_id", "location_name":
+				color = "green"
+	if AP_COLORS.has(color):
+		return "[color=%s]%s[/color]" % [AP_COLORS[color], text]
+	return text
+
+# For the "your messages only" filter: item/hint messages count when you send or receive
+# the item, others when they reference your slot. Server replies and countdowns always count.
+static func _is_relevant(command: Dictionary, parts: Array, me: int) -> bool:
+	match str(command.get("type", "")):
+		"ItemSend", "Hint":
+			if int(command.get("receiving", -1)) == me:
+				return true
+			var item_dict = command.get("item", null)
+			return item_dict is Dictionary and int(item_dict.get("player", -1)) == me
+		"CommandResult", "AdminCommandResult", "Countdown":
+			return true
+	if int(command.get("slot", -1)) == me:
+		return true
+	for part in parts:
+		if str(part.get("type", "")) == "player_id" and int(str(part.get("text", "-1"))) == me:
+			return true
+	return false

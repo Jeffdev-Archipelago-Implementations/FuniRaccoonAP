@@ -1,5 +1,4 @@
 extends Node
-class_name ApWebSocketConnection
 
 enum State {
 	CONNECTING = 0,

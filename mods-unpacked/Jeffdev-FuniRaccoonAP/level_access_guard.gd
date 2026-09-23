@@ -1,8 +1,6 @@
-extends Node
+extends RefCounted
 
-var _orb: Node
-var ap_client: Node
-var _last_shown_level_id: int = -1
+const ApClient = preload("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap/funi_raccoon_ap_client.gd")
 
 # Minimum dumpsterable AP items received (items_stored.size()) required per cluster.
 const CLUSTER_REQUIREMENTS: Dictionary = {
@@ -27,17 +25,10 @@ static func item_requirement_met(level_id: level_changer.LEVEL_ID) -> bool:
 		return Globals.save_file.get_meta("ap_brazil_train_ticket", false)
 	return true
 
-# Set by mod_main so the static requirement lookups can remap the vanilla values below
-# to this slot's configured thresholds.
-static var _client = null
-static func set_client(c) -> void:
-	_client = c
-
 static func get_required_for_level(level_id: level_changer.LEVEL_ID) -> int:
+	var ap_client: ApClient = ModLoader.get_node("Jeffdev-FuniRaccoonAP").ap_client
 	var required: int = _raw_required_for_level(level_id)
-	if is_instance_valid(_client) and _client.has_method("slot_threshold_for"):
-		return _client.slot_threshold_for(required)
-	return required
+	return ap_client.slot_threshold_for(required)
 
 static func _raw_required_for_level(level_id: level_changer.LEVEL_ID) -> int:
 	if LEVEL_REQUIREMENTS.has(level_id):
@@ -46,9 +37,6 @@ static func _raw_required_for_level(level_id: level_changer.LEVEL_ID) -> int:
 		return 0
 	var cluster = LevelChanger.all_levels[level_id].level_cluster
 	return CLUSTER_REQUIREMENTS.get(cluster, 0)
-
-func _get_required(level_id: level_changer.LEVEL_ID) -> int:
-	return get_required_for_level(level_id)
 
 # Human-readable name of the specific item a level needs (beyond the item count).
 static func _missing_item_text(level_id: level_changer.LEVEL_ID) -> String:
@@ -75,74 +63,3 @@ static func locked_message(level_id: level_changer.LEVEL_ID, connected: bool, ha
 	if needs.is_empty():
 		return header
 	return header + " You need: " + ", ".join(needs) + "."
-
-func _process(_delta: float) -> void:
-	if not is_instance_valid(_orb):
-		return
-	var icon = _orb.current_selected_world
-	if icon == null or not is_instance_valid(icon):
-		return
-	var current_id: int = int(icon.level_id)
-	if current_id == _last_shown_level_id:
-		return
-	_last_shown_level_id = current_id
-	var items = icon.get("items")
-	if items == null or not (items is Array):
-		ModLoaderLog.warning(
-			"Selected level icon (level_id=%d) has no valid 'items' array; skipping counter." % current_id,
-			"Jeffdev-FuniRaccoonAP/LevelAccessGuard"
-		)
-		return
-	var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
-	var count: int = 0
-	for item_id in items:
-		if ap_stored.has(item_id):
-			count += 1
-	if is_instance_valid(_orb.get("items_got_text")):
-		_orb.items_got_text.text = "[shake]Checks Sent: " + str(count) + "/" + str(items.size())
-
-func _input(event: InputEvent) -> void:
-	if not is_instance_valid(_orb):
-		return
-	if _orb.transition_to_level_started:
-		return
-
-	if Input.is_action_just_pressed("JUMP") or Input.is_action_just_released("THROW"):
-		if not _orb.current_selected_world.discovered:
-			_orb.animation_player_camera.play("no_entery")
-			return
-
-		var level_id: level_changer.LEVEL_ID = _orb.current_selected_world.level_id
-		var required: int = _get_required(level_id)
-		var have: int = Globals.save_file.items_stored.size()
-
-		_orb.transition_to_level_started = true
-		_orb.animation_player_camera.play("camera_tween")
-		await _orb.animation_player_camera.animation_finished
-
-		var connected: bool = is_instance_valid(ap_client) and ap_client.connect_state == ap_client.ConnectState.CONNECTED_TO_MULTIWORLD
-		if not connected or have < required or not item_requirement_met(level_id):
-			ModLoaderLog.info(
-				"Level %s blocked: need %d items, have %d. Redirecting to dumpster." % [
-					level_changer.LEVEL_ID.keys()[level_id], required, have
-				],
-				"Jeffdev-FuniRaccoonAP/LevelAccessGuard"
-			)
-			var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
-			popup_script.show_message(locked_message(level_id, connected, have), get_tree().get_root())
-			LevelChanger.LOAD_FROM_LEVEL_SELECT_WITH_ID(level_changer.LEVEL_ID.MAIN_MENU)
-		else:
-			if is_instance_valid(ap_client):
-				ap_client.update_map_location(level_id)
-			LevelChanger.LOAD_FROM_LEVEL_SELECT_WITH_ID(level_id)
-
-		MenuController.menus_transiting = false
-		_orb.queue_free()
-
-	elif Input.is_action_just_pressed("QUIT"):
-		_orb.transition_to_level_started = true
-		_orb.animation_player_camera.play("camera_tween")
-		await _orb.animation_player_camera.animation_finished
-		LevelChanger.LOAD_FROM_LEVEL_SELECT_WITH_ID(level_changer.LEVEL_ID.MAIN_MENU)
-		MenuController.menus_transiting = false
-		_orb.queue_free()
