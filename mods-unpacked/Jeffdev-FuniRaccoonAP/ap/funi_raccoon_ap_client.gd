@@ -45,19 +45,16 @@ const MAX_CONCURRENT_POLICE_CLUSTERS: int = 1
 const PHONE_SCREEN_SIZE = Vector2i(240, 480)
 const PHONE_RATIO_TRAP_DURATION: float = 30.0
 const PHONE_TRAP_META := "ap_phone_trap_original_size"
+var _phone_trap_generation: int = 0
 
-# Item index at connect time; popups only fire for items at or above this index.
+# Item index at connect time
 var _baseline_item_index: int = -1
-# ItemTacker.thresholds as shipped, restored on disconnect.
+# ItemTacker.thresholds in vanilla, restored on disconnect.
 var _vanilla_thresholds: Array = []
-# Set once we've joined the multiworld, so a failed connect (which also ends in
-# DISCONNECTED) doesn't kick the player back to the menu.
 var _was_connected: bool = false
 
 var _active_police_clusters: Array = []
 var _active_police_warning: Node2D = null
-
-var _phone_trap_generation: int = 0
 
 func _ready() -> void:
 	super._ready()
@@ -105,7 +102,6 @@ func _on_received_items(command: Dictionary) -> void:
 					get_tree().get_root()
 				)
 
-		# The base class emits this per item; UI refreshes listen for it.
 		item_received.emit(item_name, item)
 		next_index = index + 1
 		Globals.save_file.set_meta("ap_received_item_index", next_index)
@@ -116,19 +112,15 @@ func _on_received_items(command: Dictionary) -> void:
 func _item_name(ap_item_id: int) -> String:
 	if not data_package:
 		return ""
-	# JSON may have stored the key as a float.
 	var name_val = data_package.item_id_to_name.get(ap_item_id, data_package.item_id_to_name.get(float(ap_item_id), null))
 	return str(name_val) if name_val != null else ""
 
-# Applies a received item. Returns the popup name to fall back on if something new was
-# granted, or "" if nothing changed.
+# Item granting handler system, the returned string is displayed in an item popup if not ""
 func _grant_item(id: int) -> String:
 	var save := Globals.save_file
 	if id == Ids.PROGRESSIVE_DUMBBELL:
 		LevelUpSystem.level_up_system()
 		LevelUpSystem.Level_Up.emit()
-		if save.strength >= 5.0:
-			Globals.get_achievement("ACH_FULL_BELLY")
 		return "Progressive Mystical Dumbbell"
 	if id == Ids.PROGRESSIVE_COOLING_ROD:
 		return _grant_cooling_rod()
@@ -224,18 +216,13 @@ func item_stored(id: item_tracker.item_id) -> void:
 	if not Ids.STORE_ITEMS.has(id):
 		ModLoaderLog.warning("item_stored: no AP location for item_id %d (%s)" % [id, item_tracker.item_id.keys()[id]], _LOG)
 		return
-	var changed := false
 	var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
 	if not ap_stored.has(id):
 		ap_stored.append(id)
 		Globals.save_file.set_meta("ap_stored_items", ap_stored)
-		changed = true
-	# A stored (dumpster'd) item also counts as found.
 	if not Globals.save_file.items_found.has(id):
 		Globals.save_file.items_found.append(id)
-		changed = true
-	if changed:
-		Globals.save_game()
+	Globals.save_game()
 	if connect_state == ConnectState.CONNECTED_TO_MULTIWORLD:
 		check_location(Ids.store_location(id))
 
@@ -257,8 +244,7 @@ func shop_upgrade_purchased(flag: String) -> void:
 	_send_mapped_check("ap_checked_shop_upgrades", Ids.SHOP_UPGRADE_LOCATIONS, flag)
 
 func cat_found(cat_id: item_tracker.item_id) -> void:
-	if Ids.CAT_LOCATIONS.has(cat_id):
-		_send_check("ap_checked_cats", Ids.CAT_LOCATIONS[cat_id])
+	_send_mapped_check("ap_checked_cats", Ids.CAT_LOCATIONS, cat_id)
 
 func hat_collected(hat_id: int) -> void:
 	_send_mapped_check("ap_checked_hats", Ids.HAT_LOCATIONS, hat_id)
@@ -275,17 +261,14 @@ func euro_collected(money_id: String) -> void:
 func speedway_completed() -> void:
 	_send_check("ap_checked_speedway", Ids.SPEEDWAY_LOCATION)
 
-# Resends every check recorded in the save, e.g. ones made while disconnected.
 func _resend_saved_checks() -> void:
-	var found_changed := false
 	for id in Globals.save_file.get_meta("ap_stored_items", []):
 		if Ids.STORE_ITEMS.has(id):
 			check_location(Ids.store_location(id))
 		if not Globals.save_file.items_found.has(id):
 			Globals.save_file.items_found.append(id)
-			found_changed = true
-	if found_changed:
-		Globals.save_game()
+
+	Globals.save_game()
 	for collectable_id in Globals.save_file.get_meta("ap_eaten_dumbbells", []):
 		if Ids.DUMBBELL_LOCATIONS.has(collectable_id):
 			check_location(Ids.DUMBBELL_LOCATIONS[collectable_id])
@@ -297,8 +280,6 @@ func _resend_saved_checks() -> void:
 # Connection
 # =============================================================================
 
-# Refuses a room whose seed doesn't match the one this save was first connected to
-# (the "ap_seed" save meta), so a save can't be corrupted by a different multiworld.
 func _validate_room_info(room_info_to_validate: Dictionary) -> int:
 	var stored_seed: String = str(Globals.save_file.get_meta("ap_seed", ""))
 	var room_seed: String = str(room_info_to_validate.get("seed_name", ""))
@@ -320,13 +301,12 @@ func _on_joined_multiworld() -> void:
 	_end_phone_ratio_trap()
 	_baseline_item_index = Globals.save_file.get_meta("ap_received_item_index", 0)
 	_apply_slot_thresholds()
-	if LevelChanger.current_level != null:
-		update_map_location(LevelChanger.current_level.level_id)
 	_resend_saved_checks()
-	Globals.save_file.streamer_mode = true
-	_hide_rackheath()
+	Globals.save_file.streamer_mode = true # All this does is make Hintblo spawn, nothing else
 	_return_to_hub()
 	ApChatPopup.show_message(ApChatPopup.HELP_MESSAGE, get_tree().get_root())
+	if LevelChanger.current_level != null:
+		update_map_location(LevelChanger.current_level.level_id)
 
 func _on_disconnected() -> void:
 	if not _vanilla_thresholds.is_empty():
@@ -339,8 +319,6 @@ func _on_disconnected() -> void:
 	ApChatPopup.show_message("[color=#EE0000]Disconnected from Archipelago[/color]", get_tree().get_root())
 	Globals.QUIT_TO_MEUN()
 
-# Swaps ItemTacker.thresholds for the slot's options so vanilla consumers like
-# dumpster_text.gd show AP values.
 func _apply_slot_thresholds() -> void:
 	if _vanilla_thresholds.is_empty():
 		_vanilla_thresholds = ItemTacker.thresholds.duplicate()
@@ -352,15 +330,6 @@ func _apply_slot_thresholds() -> void:
 		int(options.get("act4_threshold", 50)),
 	]
 
-# Rackheath is an AP location, so it starts hidden from the level select.
-func _hide_rackheath() -> void:
-	var rackheath = LevelChanger.all_levels.get(level_changer.LEVEL_ID.DEFAULT)
-	if rackheath != null:
-		rackheath.level_found = false
-	if Globals.save_file.found_levels.has(level_changer.LEVEL_ID.DEFAULT):
-		Globals.save_file.found_levels.erase(level_changer.LEVEL_ID.DEFAULT)
-		Globals.save_game()
-
 func _return_to_hub() -> void:
 	if LevelChanger.current_level != null and LevelChanger.current_level.level_id == level_changer.LEVEL_ID.DEFAULT:
 		return
@@ -369,8 +338,7 @@ func _return_to_hub() -> void:
 	else:
 		LevelChanger.LOAD_FROM_LEVEL_WITH_SHORT_ID(level_changer.LEVEL_ID.MAIN_MENU, Globals.player_inst, "START_SPAWN")
 
-## Remaps a vanilla dumpster gate value (a hub door/floor/meter's hardcoded 15/25/35/50)
-## to this slot's threshold. Other values, and everything while disconnected, are unchanged.
+# Checks slot threshold against the vanilla value for each act and swaps it
 func slot_threshold_for(vanilla_value: int) -> int:
 	if _vanilla_thresholds.is_empty():
 		return vanilla_value
@@ -380,7 +348,7 @@ func slot_threshold_for(vanilla_value: int) -> int:
 	return int(ItemTacker.thresholds[idx])
 
 # =============================================================================
-# Tracker map location
+# Tracker map storage
 # =============================================================================
 
 func _map_location_key() -> String:
@@ -482,16 +450,12 @@ func _trigger_police_trap() -> void:
 	var raccoon_player := Globals.get_player()
 	if not is_instance_valid(raccoon_player) or not is_instance_valid(LevelChanger.current_level):
 		return
-	# Cap concurrent clusters: a burst of Police Traps (e.g. several granted on connect)
-	# spawning dozens of pathfinding cars used to hang the game.
 	_active_police_clusters = _active_police_clusters.filter(func(c): return is_instance_valid(c))
 	if _active_police_clusters.size() >= MAX_CONCURRENT_POLICE_CLUSTERS:
 		return
 
 	var police_inst: Node3D = POLICE_CLUSTER_SCENE.instantiate()
 	LevelChanger.current_level.add_child(police_inst)
-	# police_cluster.tscn's first car has a zero local transform, so spawning exactly on
-	# the player made its look_at() fail every frame.
 	police_inst.global_position = raccoon_player.global_position + Vector3(2.0, 0.0, 2.0)
 	_active_police_clusters.append(police_inst)
 	get_tree().create_timer(POLICE_TRAP_CAR_DURATION).timeout.connect(func():

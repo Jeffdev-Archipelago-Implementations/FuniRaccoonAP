@@ -81,8 +81,7 @@ func _ap_on_animation_finished(anim_name: String) -> void:
 			_ap_client.shop_upgrade_purchased(flag)
 		)
 
-# Shows the AP image while unfocused and the vanilla spin sheet while focused, scaled
-# so the AP image matches the sheet's 250px frames.
+# A little hack so I don't have to make a spritesheet for the Archipelago logo sign
 func _ap_apply_sign_texture(upgrade_sign, ap_tex: Texture2D) -> void:
 	if ap_tex == null or not is_instance_valid(upgrade_sign) or not is_instance_valid(upgrade_sign.item_sprite):
 		return
@@ -94,8 +93,8 @@ func _ap_apply_sign_texture(upgrade_sign, ap_tex: Texture2D) -> void:
 	var ap_scale: Vector2 = spin_scale * (250.0 / float(ap_tex.get_height()))
 	sprite.sprite_frames = ap_frames
 	sprite.scale = ap_scale
-	# Runs after the sign's own toggle_spin (connected in its _ready), so the
-	# play/stop it did on the wrong SpriteFrames is redone on the right one here.
+
+	# Swap when focus is entered/exited, when focus is entered the logo is hidden from view anyways!
 	upgrade_sign.button.focus_entered.connect(func():
 		sprite.sprite_frames = spin_frames
 		sprite.scale = spin_scale

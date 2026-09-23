@@ -14,8 +14,7 @@ const MONITOR_SOUND_SCENES: Array[String] = [
 const GACHA_MACHINE_SCENE_UID := "uid://bevwwjw1owksw"
 const TROLLEY_VEHICLE_SCENE_UID := "uid://b4skd2o7aix7d"
 
-# Ids the game has no enum entry for: item_tracker.item_id stops at ROBIN = 184 and
-# SaveGame.vehicles stops at HORSE = 4, so the mod assigns these itself.
+# Unused/unnamed content ids we have to manually name here
 const GACHA_MACHINE_ITEM_ID := 185
 const TROLLEY_VEHICLE_ID := 5
 
@@ -81,12 +80,10 @@ func restore_vehicles(owned: Array) -> void:
 # =============================================================================
 
 func _init() -> void:
-	# Every script under extensions/ extends the game script at the same relative path,
-	# so installing them all is just a matter of finding them.
+	# Install extensions
 	for extension_path in _find_scripts(ModLoaderMod.get_unpacked_dir().path_join(MOD_NAME).path_join("extensions")):
 		ModLoaderMod.install_script_extension(extension_path)
-	# The game's autoloads preload these scenes before ModLoader runs, so they still
-	# hold the vanilla scripts. Refresh each scene that directly uses an extended script.
+	# The game's autoloads preload these scenes before ModLoader runs, so they have to be refreshed after it loads.
 	for scene_path in [
 		"res://Scene/MainMenu/SaveFileSelect.tscn",
 		"res://Scene/Menus/setup/store_page.tscn",
@@ -182,14 +179,10 @@ func _ready() -> void:
 func _on_node_added(node: Node) -> void:
 	_replace_title_on(node)
 
-	# The settings screens' monitor noise is a plain autoplaying player; F7 mutes it
-	# (see ap_chat_popup.gd). Autoplay has only just started when the node is added.
 	var in_settings_menu: bool = node.owner != null and MONITOR_SOUND_SCENES.has(node.owner.scene_file_path)
 	if in_settings_menu and ApChatPopup.is_monitor_sound(node) and Globals.save_file.get_meta(ApChatPopup.META_MONITOR_SOUND_MUTED, false):
 		node.stop()
 
-	# The gacha machine's root uses the generic InteractData script every item shares,
-	# so its obj_id can't be set from a script extension.
 	if node.scene_file_path == GACHA_MACHINE_SCENE_PATH:
 		if node is InteractData:
 			node.obj_id = GACHA_MACHINE_ITEM_ID
@@ -267,7 +260,6 @@ func _replace_title_on(node: Node) -> void:
 	var tex: Texture2D = node.texture
 	if tex == null:
 		return
-	# Some scenes embed the title image, so only load_path carries its file name.
 	var id: String = tex.resource_path
 	var load_path = tex.get("load_path")
 	if load_path is String:

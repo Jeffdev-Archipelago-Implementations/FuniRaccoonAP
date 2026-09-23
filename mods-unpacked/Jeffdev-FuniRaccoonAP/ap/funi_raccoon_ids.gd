@@ -1,12 +1,9 @@
 extends RefCounted
 
-# Archipelago ids, matching the apworld (worlds/funi_raccoon/items.py and locations.py).
-# The game is the source of truth: a storable item's AP item id is its item_tracker.item_id,
-# and its "Store" location is STORE_LOCATION_OFFSET + that id.
+# Archipelago id constants
 
 const STORE_LOCATION_OFFSET := 1000
 
-# 185 is the gacha machine, which has no item_tracker.item_id; the mod registers it itself.
 const STORE_ITEMS: Array = [
 	item_tracker.item_id.MOAI,
 	item_tracker.item_id.STREET_LIGHT,
@@ -169,7 +166,7 @@ const STORE_ITEMS: Array = [
 	item_tracker.item_id.OUTDOOR_CHAIR,
 	item_tracker.item_id.LIGHTNING_ROD,
 	item_tracker.item_id.ROBIN,
-	185,
+	185, # Gacha Machine, this doesn't have an item id in the item tracker so we just force add it here
 ]
 
 static func store_location(item_id: int) -> int:
@@ -210,13 +207,12 @@ const JEWELS: Dictionary = {
 const POLICE_TRAP := 701
 const PHONE_RATIO_TRAP := 702
 const BRAZIL_TRAIN_TICKET := 800
-# 5 is the trolley, which the mod adds (SaveGame.vehicles stops at HORSE = 4).
 const VEHICLES: Dictionary = {
 	900: SaveGame.vehicles.SCOOTER,
 	901: SaveGame.vehicles.TONY,
 	902: SaveGame.vehicles.FORKLIFT,
 	903: SaveGame.vehicles.HORSE,
-	904: 5,
+	904: 5, # Trolley, unused vehicle in vanilla that we add
 }
 
 # Locations
