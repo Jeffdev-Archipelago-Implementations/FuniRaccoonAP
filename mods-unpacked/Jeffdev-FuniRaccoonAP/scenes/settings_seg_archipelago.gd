@@ -32,6 +32,9 @@ var _count_labels: Dictionary = {}
 
 func _ready() -> void:
 	ap_client = ModLoader.get_node("Jeffdev-FuniRaccoonAP").ap_client
+	var vp := get_viewport()
+	if vp is SubViewport:
+		vp.gui_embed_subwindows = true
 	for icon_name in COUNTED_TRACKERS:
 		var icon: Control = tracker_grid.get_node_or_null(icon_name)
 		if icon != null:

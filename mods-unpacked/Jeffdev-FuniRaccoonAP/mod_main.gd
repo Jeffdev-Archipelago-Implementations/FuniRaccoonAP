@@ -95,6 +95,7 @@ func _init() -> void:
 		"res://Scene/Player Stuff/menu/items_left_new.tscn",
 		"res://Scene/Player Stuff/ui/object_icon.tscn",
 		"res://Scene/Menus/car_menu.tscn",
+		"res://Scene/Objects/brob_energy/brob_energy.tscn",
 	]:
 		ModLoaderMod.refresh_scene(scene_path)
 

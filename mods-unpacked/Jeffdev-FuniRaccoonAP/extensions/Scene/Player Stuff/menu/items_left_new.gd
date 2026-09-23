@@ -30,7 +30,7 @@ func populate_list() -> void:
 
 		var new_item = NEW_ITEM.instantiate()
 		grid.add_child(new_item)
-		new_item.set_val(item_inst.hud_icon, Globals.save_file.items_found.has(item_id), sent)
+		new_item.set_val(item_inst.hud_icon, true, sent)
 		item_inst.queue_free()
 
 func _ap_show_count(count: int, total: int, level_name: String) -> void:
