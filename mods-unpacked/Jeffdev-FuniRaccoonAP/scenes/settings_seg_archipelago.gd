@@ -102,7 +102,7 @@ func _update_status() -> void:
 		icon.self_modulate = TRACKER_OBTAINED if won else TRACKER_MISSING
 
 func _tracker_count(icon_name: String) -> int:
-	var save := Globals.save_file
+	var save: SaveGame = Globals.save_file
 	match icon_name:
 		"OrbTracker":
 			return _stored(item_tracker.item_id.ORB)

@@ -1,0 +1,239 @@
+[gd_scene format=3 uid="uid://cb26usax1d14q"]
+
+[ext_resource type="Script" uid="uid://c6moekms5naxq" path="res://Scene/Menus/settings/appear_code.gd" id="1_mr5ay"]
+[ext_resource type="Theme" uid="uid://bnbdrri8wb4j4" path="res://Shaders/computer_screen_font.tres" id="2_v4d4o"]
+[ext_resource type="Script" uid="uid://b1mprtgk1xbg8" path="res://Scene/Menus/settings/audioSettings.gd" id="3_3oov2"]
+[ext_resource type="Script" uid="uid://kpvuoaffv44v" path="res://Scene/Menus/settings/on_visible.gd" id="4_bfvop"]
+[ext_resource type="PackedScene" uid="uid://bdm4hg0t1ji4s" path="res://Scene/Menus/butten_press.tscn" id="5_3fo1s"]
+[ext_resource type="Script" uid="uid://pqenr34masw5" path="res://Scene/Menus/settings/addGroup.gd" id="6_lkwby"]
+[ext_resource type="Script" uid="uid://cd2n3qnxu3nny" path="res://Scene/Menus/settings/submit_pause_menu.gd" id="7_8u0h3"]
+[ext_resource type="AudioStream" uid="uid://cvmx22g33pl8f" path="res://Audio/SoundEffects/button/button.ogg" id="8_pon7j"]
+[ext_resource type="Script" uid="uid://y1bils7ubbus" path="res://Scene/Menus/settings/butten_press_audio.gd" id="9_l5f28"]
+[ext_resource type="Script" uid="uid://d4g5chnrqo4wq" path="res://Scene/Menus/volume.gd" id="10_4s3r1"]
+[ext_resource type="Script" uid="uid://ba7xyxil4ur6w" path="res://mods-unpacked/Jeffdev-FuniRaccoonAP/scenes/monitor_sound_toggle.gd" id="11_monsnd"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1w57a"]
+bg_color = Color(0.659007, 0, 0, 1)
+
+[sub_resource type="Theme" id="Theme_ib41e"]
+HSlider/styles/grabber_area_highlight = SubResource("StyleBoxFlat_1w57a")
+
+[node name="AudioSettings" type="Control" unique_id=264697563]
+layout_mode = 3
+anchors_preset = 0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=2085850955]
+layout_mode = 0
+offset_left = 30.0
+offset_top = 20.0
+offset_right = 290.0
+offset_bottom = 464.0
+focus_neighbor_right = NodePath("../VBoxContainer2")
+script = ExtResource("1_mr5ay")
+
+[node name="Audio Setup" type="RichTextLabel" parent="VBoxContainer" unique_id=769193731]
+layout_mode = 2
+theme = ExtResource("2_v4d4o")
+theme_override_colors/default_color = Color(0.659007, 0, 0, 1)
+bbcode_enabled = true
+text = "[u]Audio Presets[/u]"
+fit_content = true
+script = ExtResource("3_3oov2")
+
+[node name="Average" type="CheckBox" parent="VBoxContainer" unique_id=1100679378]
+layout_mode = 2
+focus_next = NodePath("../Sensitive")
+focus_previous = NodePath("../Tinnitus")
+theme = ExtResource("2_v4d4o")
+text = "Normal Ears"
+script = ExtResource("4_bfvop")
+
+[node name="butten_press" parent="VBoxContainer/Average" unique_id=1382469575 instance=ExtResource("5_3fo1s")]
+
+[node name="Sensitive" type="CheckBox" parent="VBoxContainer" unique_id=1259444689]
+layout_mode = 2
+focus_neighbor_top = NodePath("../Average")
+focus_next = NodePath("../Full")
+focus_previous = NodePath("../Average")
+theme = ExtResource("2_v4d4o")
+text = "Sensitive Ears"
+script = ExtResource("6_lkwby")
+
+[node name="butten_press" parent="VBoxContainer/Sensitive" unique_id=621800211 instance=ExtResource("5_3fo1s")]
+
+[node name="Full" type="CheckBox" parent="VBoxContainer" unique_id=961257482]
+layout_mode = 2
+focus_neighbor_top = NodePath("../Sensitive")
+focus_neighbor_bottom = NodePath("../Tinnitus")
+focus_next = NodePath("../Tinnitus")
+focus_previous = NodePath("../Sensitive")
+theme = ExtResource("2_v4d4o")
+text = "Full Blast"
+script = ExtResource("6_lkwby")
+
+[node name="butten_press" parent="VBoxContainer/Full" unique_id=255135066 instance=ExtResource("5_3fo1s")]
+
+[node name="Tinnitus" type="CheckBox" parent="VBoxContainer" unique_id=1683180003]
+layout_mode = 2
+focus_neighbor_top = NodePath("../Full")
+focus_neighbor_bottom = NodePath("../submit")
+focus_next = NodePath("../submit")
+focus_previous = NodePath("../Full")
+theme = ExtResource("2_v4d4o")
+text = "Tinnitus"
+script = ExtResource("6_lkwby")
+
+[node name="butten_press" parent="VBoxContainer/Tinnitus" unique_id=18999510 instance=ExtResource("5_3fo1s")]
+
+[node name="Audio Setup2" type="RichTextLabel" parent="VBoxContainer" unique_id=263746029]
+layout_mode = 2
+theme = ExtResource("2_v4d4o")
+theme_override_colors/default_color = Color(0.659007, 0, 0, 1)
+bbcode_enabled = true
+text = "[u]Extra Audio Settings[/u]"
+fit_content = true
+script = ExtResource("3_3oov2")
+
+[node name="Monitor Sound" type="CheckBox" parent="VBoxContainer" unique_id=1180103693]
+layout_mode = 2
+focus_neighbor_top = NodePath("../Full")
+focus_neighbor_bottom = NodePath("../submit")
+focus_next = NodePath("../submit")
+focus_previous = NodePath("../Full")
+theme = ExtResource("2_v4d4o")
+text = "Monitor Sound"
+script = ExtResource("11_monsnd")
+
+[node name="butten_press" parent="VBoxContainer/Monitor Sound" unique_id=16633875 instance=ExtResource("5_3fo1s")]
+
+[node name="Spacing2" type="Label" parent="VBoxContainer" unique_id=43503740]
+layout_mode = 2
+theme = ExtResource("2_v4d4o")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+text = "
+
+"
+
+[node name="submit" type="Button" parent="VBoxContainer" unique_id=364969871]
+z_index = 1
+layout_mode = 2
+focus_neighbor_top = NodePath("../Tinnitus")
+focus_previous = NodePath("../Tinnitus")
+theme = ExtResource("2_v4d4o")
+theme_override_colors/font_color = Color(0.658824, 0, 0, 1)
+text = ">Accept"
+alignment = 0
+script = ExtResource("7_8u0h3")
+
+[node name="butten_press" type="AudioStreamPlayer" parent="VBoxContainer/submit" unique_id=603310201]
+stream = ExtResource("8_pon7j")
+script = ExtResource("9_l5f28")
+
+[node name="VBoxContainer2" type="VBoxContainer" parent="." unique_id=1626766890]
+layout_mode = 0
+offset_left = 323.0
+offset_top = 20.0
+offset_right = 598.0
+offset_bottom = 434.0
+focus_neighbor_left = NodePath("../VBoxContainer")
+script = ExtResource("1_mr5ay")
+
+[node name="AudioLabel" type="Label" parent="VBoxContainer2" unique_id=347003110]
+layout_mode = 2
+theme = ExtResource("2_v4d4o")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+text = "Master"
+
+[node name="MasterHSlider" type="HSlider" parent="VBoxContainer2" unique_id=264343530]
+layout_mode = 2
+focus_neighbor_top = NodePath("../../VBoxContainer/Sensitive")
+focus_neighbor_bottom = NodePath("../ExplosionHSlider")
+theme = SubResource("Theme_ib41e")
+max_value = 1.0
+step = 0.05
+script = ExtResource("10_4s3r1")
+
+[node name="Explosions" type="Label" parent="VBoxContainer2" unique_id=1301906417]
+layout_mode = 2
+theme = ExtResource("2_v4d4o")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+text = "Explosions"
+
+[node name="ExplosionHSlider" type="HSlider" parent="VBoxContainer2" unique_id=970290410]
+layout_mode = 2
+focus_neighbor_top = NodePath("../MasterHSlider")
+focus_neighbor_bottom = NodePath("../MusicHSlider")
+theme = SubResource("Theme_ib41e")
+max_value = 1.0
+step = 0.05
+script = ExtResource("10_4s3r1")
+audio_bus_name = "Explosions"
+
+[node name="Music" type="Label" parent="VBoxContainer2" unique_id=1362796863]
+layout_mode = 2
+theme = ExtResource("2_v4d4o")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+text = "Music"
+
+[node name="MusicHSlider" type="HSlider" parent="VBoxContainer2" unique_id=505639577]
+layout_mode = 2
+focus_neighbor_top = NodePath("../ExplosionHSlider")
+focus_neighbor_bottom = NodePath("../EffectLabel")
+theme = SubResource("Theme_ib41e")
+max_value = 1.0
+step = 0.05
+script = ExtResource("10_4s3r1")
+audio_bus_name = "Music"
+
+[node name="EffectsLabel" type="Label" parent="VBoxContainer2" unique_id=2093404325]
+layout_mode = 2
+theme = ExtResource("2_v4d4o")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+text = "Effects"
+
+[node name="EffectLabel" type="HSlider" parent="VBoxContainer2" unique_id=128924635]
+layout_mode = 2
+focus_neighbor_top = NodePath("../MusicHSlider")
+focus_neighbor_bottom = NodePath("../AudienceHSlider")
+theme = SubResource("Theme_ib41e")
+max_value = 1.0
+step = 0.05
+script = ExtResource("10_4s3r1")
+audio_bus_name = "Effects"
+
+[node name="Audience" type="Label" parent="VBoxContainer2" unique_id=33061034]
+layout_mode = 2
+theme = ExtResource("2_v4d4o")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+text = "Audience"
+
+[node name="AudienceHSlider" type="HSlider" parent="VBoxContainer2" unique_id=1513170390]
+layout_mode = 2
+focus_neighbor_top = NodePath("../EffectLabel")
+focus_neighbor_bottom = NodePath("../TinnitusHSlider")
+theme = SubResource("Theme_ib41e")
+max_value = 1.0
+step = 0.05
+script = ExtResource("10_4s3r1")
+audio_bus_name = "Audience"
+
+[node name="Tinnitus" type="Label" parent="VBoxContainer2" unique_id=1225132057]
+layout_mode = 2
+theme = ExtResource("2_v4d4o")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+text = "Tinnitus"
+
+[node name="TinnitusHSlider" type="HSlider" parent="VBoxContainer2" unique_id=1913521776]
+layout_mode = 2
+focus_neighbor_top = NodePath("../AudienceHSlider")
+focus_neighbor_bottom = NodePath("../../VBoxContainer/Sensitive")
+theme = SubResource("Theme_ib41e")
+max_value = 1.0
+step = 0.05
+script = ExtResource("10_4s3r1")
+audio_bus_name = "Tinnitus"
+
+[connection signal="pressed" from="VBoxContainer/Average" to="." method="_on_average_pressed"]
+[connection signal="pressed" from="VBoxContainer/Sensitive" to="." method="_on_sensitive_pressed"]
+[connection signal="pressed" from="VBoxContainer/Full" to="." method="_on_full_pressed"]
+[connection signal="pressed" from="VBoxContainer/Tinnitus" to="." method="_on_tinnitus_pressed"]

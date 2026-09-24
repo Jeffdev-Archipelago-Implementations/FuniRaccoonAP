@@ -35,8 +35,8 @@ const CHECKED_META_KEYS: Array = [
 	"ap_checked_speedway",
 ]
 
-const POLICE_CLUSTER_SCENE = preload("res://Scene/characters/police/police_cluster.tscn")
-const POLICE_WARNING_SCENE = preload("res://Scene/characters/police/police_warning.tscn")
+const POLICE_CLUSTER_SCENE_PATH := "res://Scene/characters/police/police_cluster.tscn"
+const POLICE_WARNING_SCENE_PATH := "res://Scene/characters/police/police_warning.tscn"
 const POLICE_TRAP_WARNING_DURATION: float = 20.0
 const POLICE_TRAP_CAR_DURATION: float = 25.0
 const MAX_CONCURRENT_POLICE_CLUSTERS: int = 1
@@ -117,7 +117,7 @@ func _item_name(ap_item_id: int) -> String:
 
 # Item granting handler system, the returned string is displayed in an item popup if not ""
 func _grant_item(id: int) -> String:
-	var save := Globals.save_file
+	var save: SaveGame = Globals.save_file
 	if id == Ids.PROGRESSIVE_DUMBBELL:
 		LevelUpSystem.level_up_system()
 		LevelUpSystem.Level_Up.emit()
@@ -145,9 +145,8 @@ func _grant_item(id: int) -> String:
 		return _grant_unique(save.truck_upgrades, Ids.KEI_TRUCK_UPGRADES[id], Ids.KEI_TRUCK_UPGRADES[id])
 	if Ids.HATS.has(id):
 		return _grant_unique(save.unlocked_hats, Ids.HATS[id], "Hat")
-	if Ids.JEWELS.has(id):
-		_remember("ap_received_jewels", id)
-		return _grant_unique(save.states_occurred, Ids.JEWELS[id], "Mystical Jewel")
+	if id == Ids.PROGRESSIVE_JEWEL:
+		return _grant_mystical_jewel()
 	if Ids.VEHICLES.has(id):
 		_remember("ap_received_vehicles", Ids.VEHICLES[id])
 		return _grant_unique(save.unlocked_vehicles, Ids.VEHICLES[id], "Vehicle")
@@ -183,6 +182,17 @@ func _grant_cooling_rod() -> String:
 			rods.append("fridge_king")
 		return "Progressive Cooling Rod"
 	ModLoaderLog.warning("AP granted Progressive Cooling Rod but all three are already collected.", _LOG)
+	return ""
+
+func _grant_mystical_jewel() -> String:
+	var jewels: Array = Globals.save_file.states_occurred
+	for jewel_flag in Ids.JEWELS_ORDER:
+		if jewels.has(jewel_flag):
+			continue
+		jewels.append(jewel_flag)
+		_remember("ap_received_jewels", jewel_flag)
+		return "Progressive Mystical Jewel"
+	ModLoaderLog.warning("AP granted Progressive Mystical Jewel but all four are already collected.", _LOG)
 	return ""
 
 func _remember(meta_key: String, value) -> void:
@@ -323,12 +333,12 @@ func _apply_slot_thresholds() -> void:
 	if _vanilla_thresholds.is_empty():
 		_vanilla_thresholds = ItemTacker.thresholds.duplicate()
 	var options: Dictionary = slot_data.get("options", {})
-	ItemTacker.thresholds = [
+	ItemTacker.thresholds.assign([
 		int(options.get("museum_threshold", 15)),
 		int(options.get("act2_threshold", 25)),
 		int(options.get("act3_threshold", 35)),
 		int(options.get("act4_threshold", 50)),
-	]
+	])
 
 func _return_to_hub() -> void:
 	if LevelChanger.current_level != null and LevelChanger.current_level.level_id == level_changer.LEVEL_ID.DEFAULT:
@@ -340,7 +350,7 @@ func _return_to_hub() -> void:
 
 # Checks slot threshold against the vanilla value for each act and swaps it
 func slot_threshold_for(vanilla_value: int) -> int:
-	if _vanilla_thresholds.is_empty():
+	if connect_state != ConnectState.CONNECTED_TO_MULTIWORLD:
 		return vanilla_value
 	var idx: int = DEFAULT_GATE_THRESHOLDS.find(vanilla_value)
 	if idx == -1 or idx >= ItemTacker.thresholds.size():
@@ -447,14 +457,14 @@ func clear_police_warning() -> void:
 	_active_police_warning = null
 
 func _trigger_police_trap() -> void:
-	var raccoon_player := Globals.get_player()
+	var raccoon_player: PlayerScript = Globals.get_player()
 	if not is_instance_valid(raccoon_player) or not is_instance_valid(LevelChanger.current_level):
 		return
 	_active_police_clusters = _active_police_clusters.filter(func(c): return is_instance_valid(c))
 	if _active_police_clusters.size() >= MAX_CONCURRENT_POLICE_CLUSTERS:
 		return
 
-	var police_inst: Node3D = POLICE_CLUSTER_SCENE.instantiate()
+	var police_inst: Node3D = (load(POLICE_CLUSTER_SCENE_PATH) as PackedScene).instantiate()
 	LevelChanger.current_level.add_child(police_inst)
 	police_inst.global_position = raccoon_player.global_position + Vector3(2.0, 0.0, 2.0)
 	_active_police_clusters.append(police_inst)
@@ -464,7 +474,7 @@ func _trigger_police_trap() -> void:
 	)
 
 	clear_police_warning()
-	var warning_inst: Node2D = POLICE_WARNING_SCENE.instantiate()
+	var warning_inst: Node2D = (load(POLICE_WARNING_SCENE_PATH) as PackedScene).instantiate()
 	_active_police_warning = warning_inst
 	warning_inst.tree_exited.connect(func():
 		if _active_police_warning == warning_inst:
@@ -479,7 +489,7 @@ func _trigger_police_trap() -> void:
 	get_tree().get_root().add_child(warning_inst)
 
 func _trigger_phone_ratio_trap() -> void:
-	var save := Globals.save_file
+	var save: SaveGame = Globals.save_file
 	if not save.has_meta(PHONE_TRAP_META):
 		save.set_meta(PHONE_TRAP_META, save.screen_size)
 	_phone_trap_generation += 1
@@ -492,7 +502,7 @@ func _trigger_phone_ratio_trap() -> void:
 	)
 
 func _end_phone_ratio_trap() -> void:
-	var save := Globals.save_file
+	var save: SaveGame = Globals.save_file
 	if not save.has_meta(PHONE_TRAP_META):
 		return
 	save.screen_size = save.get_meta(PHONE_TRAP_META)

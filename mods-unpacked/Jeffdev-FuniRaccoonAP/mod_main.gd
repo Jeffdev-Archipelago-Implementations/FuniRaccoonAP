@@ -2,6 +2,7 @@ extends Node
 
 const ApClient = preload("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap/funi_raccoon_ap_client.gd")
 const ApChatPopup = preload("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_chat_popup.gd")
+const LevelAccessGuard = preload("res://mods-unpacked/Jeffdev-FuniRaccoonAP/level_access_guard.gd")
 const MOD_NAME = "Jeffdev-FuniRaccoonAP"
 const CONFIG_PATH = "user://ap_connect.json"
 
@@ -11,8 +12,16 @@ const MONITOR_SOUND_SCENES: Array[String] = [
 	"res://Scene/Menus/settings/settins_menu.tscn",
 	"res://Scene/Menus/setup/setup_menu.tscn",
 ]
+const MAIN_MENU_SCENE_PATH := "res://Scene/MainMenu/MainMenu.tscn"
+const MAIN_MENU_TITLE_NODES: Array[String] = ["Title", "Title/Title2"]
+const TRASCO_TRAIN_SCENE_PATH := "res://Scene/Levels/inside_train/inside_train_TRASCO.tscn"
 const GACHA_MACHINE_SCENE_UID := "uid://bevwwjw1owksw"
 const TROLLEY_VEHICLE_SCENE_UID := "uid://b4skd2o7aix7d"
+
+const TRACKER_KEY = KEY_F1
+const SETTINGS_SWAPPING_SCRIPT = "res://Scene/Menus/settings/Settings_Swapping.gd"
+const MONITOR_SOUND = "res://Audio/SoundEffects/computer/facuarmo__286-startup.ogg"
+const META_MONITOR_SOUND_MUTED = "ap_monitor_sound_muted"
 
 # Unused/unnamed content ids we have to manually name here
 const GACHA_MACHINE_ITEM_ID := 185
@@ -53,14 +62,6 @@ func instantiate_item(item_id) -> InteractData:
 		inst.queue_free()
 	return null
 
-func _register_gacha_machine_item() -> void:
-	var item_id: int = GACHA_MACHINE_ITEM_ID
-	if ItemTacker.item_list_data.has(item_id):
-		return
-	# item_list_data is typed Dictionary[item_id, String], so this must be the uid
-	ItemTacker.item_list_data[item_id] = GACHA_MACHINE_SCENE_UID
-	ModLoaderLog.info("Registered gacha machine with ItemTacker as id %d." % item_id, MOD_NAME)
-
 # Called by the path_3d.gd and area_3d_horse.gd extensions.
 func hide_vehicles(vehicles: Array) -> Array:
 	var owned: Array = []
@@ -79,22 +80,42 @@ func restore_vehicles(owned: Array) -> void:
 # Startup things
 # =============================================================================
 
+var _paths_taken_over: Array[Resource] = []
+
+func _take_over_path(vanilla_path: String, mod_path: String) -> void:
+	var res: Resource = load(mod_path)
+	res.take_over_path(vanilla_path)
+	_paths_taken_over.append(res)
+
 func _init() -> void:
 	# Install extensions
 	for extension_path in _find_scripts(ModLoaderMod.get_unpacked_dir().path_join(MOD_NAME).path_join("extensions")):
 		ModLoaderMod.install_script_extension(extension_path)
-	# The game's autoloads preload these scenes before ModLoader runs, so they have to be refreshed after it loads.
+	# A few things have to be refreshed due to loading early
 	for scene_path in [
-		"res://Scene/MainMenu/SaveFileSelect.tscn",
-		"res://Scene/Menus/setup/store_page.tscn",
-		"res://Scene/Menus/pause_menu.tscn",
-		"res://Scene/Menus/settings/loading_page.tscn",
-		"res://Scene/Player Stuff/menu/items_left_new.tscn",
 		"res://Scene/Player Stuff/ui/object_icon.tscn",
-		"res://Scene/Menus/car_menu.tscn",
+		"res://Scene/Objects/money/money.tscn",
 		"res://Scene/Objects/brob_energy/brob_energy.tscn",
+		"res://Scene/Menus/setup/store_page.tscn",
+		"res://Scene/Menus/funiRaccoonDelux.tscn",
 	]:
 		ModLoaderMod.refresh_scene(scene_path)
+
+	_take_over_path("res://Sprites/title_text.png", "res://mods-unpacked/Jeffdev-FuniRaccoonAP/images/title_text.png")
+	_take_over_path("res://Sprites/title_text_no_bg.png", "res://mods-unpacked/Jeffdev-FuniRaccoonAP/images/title_text_no_bg.png")
+	_take_over_path("res://Scene/Menus/settings/settings_seg_audio.tscn", "res://mods-unpacked/Jeffdev-FuniRaccoonAP/scenes/settings_seg_audio.tscn")
+
+	# The gacha machine is an item the game never gives an id or registers.
+	ModLoaderMod.extend_scene(GACHA_MACHINE_SCENE_PATH, func(root: Node) -> Node:
+		root.obj_id = GACHA_MACHINE_ITEM_ID
+		return root)
+
+	ModLoaderMod.extend_scene(MAIN_MENU_SCENE_PATH, func(root: Node) -> Node:
+		var title_tex: Texture2D = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/images/title_text_no_bg.png")
+		for node_path in MAIN_MENU_TITLE_NODES:
+			root.get_node(node_path).texture = title_tex
+		return root)
+
 
 func _find_scripts(dir_path: String) -> Array[String]:
 	var scripts: Array[String] = []
@@ -106,6 +127,10 @@ func _find_scripts(dir_path: String) -> Array[String]:
 	return scripts
 
 func _ready() -> void:
+	# Defer setup until all the autoloads are ready
+	_setup.call_deferred()
+
+func _setup() -> void:
 	var config_data = {"ap_server": "", "ap_player": "", "ap_password": ""}
 
 	if FileAccess.file_exists(CONFIG_PATH):
@@ -135,7 +160,7 @@ func _ready() -> void:
 	ap_client = ApClient.new(ap_websocket_connection, client_config)
 	add_child(ap_client)
 
-	_register_gacha_machine_item()
+	ItemTacker.item_list_data[GACHA_MACHINE_ITEM_ID] = GACHA_MACHINE_SCENE_UID
 
 	ModLoaderLog.success("AP client ready v%s" % ModLoaderMod.get_mod_data(MOD_NAME).manifest.version_number, MOD_NAME)
 
@@ -143,14 +168,7 @@ func _ready() -> void:
 	connect_panel = ApConnectPanelScript.instantiate()
 	connect_panel.ap_client = ap_client
 	add_child(connect_panel)
-
-	_title_text_tex = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/images/title_text.png")
-	_title_text_no_bg_tex = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/images/title_text_no_bg.png")
-	if _title_text_tex == null or _title_text_no_bg_tex == null:
-		ModLoaderLog.warning("Title replacement texture(s) failed to load.", MOD_NAME)
-
 	get_tree().node_added.connect(_on_node_added)
-	call_deferred("_scan_existing_title")
 
 	LevelChanger.changing_level.connect(func():
 		_color_randomized_this_transition = false
@@ -177,17 +195,43 @@ func _ready() -> void:
 # =============================================================================
 
 func _on_node_added(node: Node) -> void:
-	_replace_title_on(node)
+	# I have to do this here otherwise things get loaded too quickly in the autoloads and it freaks out
+	if node is level_teleporter:
+		node.ready.connect(func():
+			node.body_entered.disconnect(node._on_body_entered)
+			node.body_entered.connect(_ap_on_body_entered.bind(node)), CONNECT_ONE_SHOT)
 
 	var in_settings_menu: bool = node.owner != null and MONITOR_SOUND_SCENES.has(node.owner.scene_file_path)
-	if in_settings_menu and ApChatPopup.is_monitor_sound(node) and Globals.save_file.get_meta(ApChatPopup.META_MONITOR_SOUND_MUTED, false):
+	if in_settings_menu and is_monitor_sound(node) and Globals.save_file.get_meta(META_MONITOR_SOUND_MUTED, false):
 		node.stop()
 
-	if node.scene_file_path == GACHA_MACHINE_SCENE_PATH:
-		if node is InteractData:
-			node.obj_id = GACHA_MACHINE_ITEM_ID
-		else:
-			ModLoaderLog.warning("Gacha machine root is %s, not InteractData; its check will never send." % node.get_class(), MOD_NAME)
+	if node is InteractData and node.obj_name == "CHEESE" and node.obj_id == item_tracker.item_id.DEFAULT:
+		node.obj_id = item_tracker.item_id.CHEESE
+
+func _ap_on_body_entered(body, teleporter: level_teleporter) -> void:
+	if teleporter.random and body is PlayerScript:
+		_random_teleport(body, teleporter)
+		return
+	if not teleporter.random:
+		var level_id = teleporter.level_id
+		var required: int = LevelAccessGuard.get_required_for_level(level_id)
+		var have: int = Globals.save_file.items_stored.size()
+		var connected: bool = ap_client.connect_state == ap_client.ConnectState.CONNECTED_TO_MULTIWORLD
+		if not connected or have < required or not LevelAccessGuard.item_requirement_met(level_id):
+			ApChatPopup.show_message(LevelAccessGuard.locked_message(level_id, connected, have), get_tree().get_root())
+			return
+	teleporter._on_body_entered(body)
+
+# Modified version of random teleport that removes the 1% chance for cricket
+func _random_teleport(body, teleporter: level_teleporter) -> void:
+	var pool: Array
+	if Globals.save_file.is_the_future:
+		pool = teleporter.future_level_id.duplicate()
+	else:
+		pool = Globals.save_file.found_levels
+	if pool.is_empty():
+		pool = [LevelChanger.LEVEL_ID.MAIN_MENU]
+	LevelChanger.CHANGE_LEVEL(LevelChanger.get_level_resource(pool.pick_random()).level_container, body, teleporter.level_spawn_name, teleporter.level_transition_effect)
 
 # Called by the Dumpster.gd and dumpster_special_ending.gd extensions.
 func dumpster_handling(node: Node, body: InteractData) -> void:
@@ -249,6 +293,25 @@ func dumpster_handling(node: Node, body: InteractData) -> void:
 	body.item_in_dumpster.emit()
 	ap_client.item_stored(body.obj_id)
 	node.process_item(body, true)
+
+# =============================================================================
+# AP Settings
+# =============================================================================
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == TRACKER_KEY:
+		open_tracker()
+
+func open_tracker() -> void:
+	if MenuController.game_paused or MenuController.menus_transiting or not MenuController.menus_enabled:
+		return
+	load(SETTINGS_SWAPPING_SCRIPT).open_ap_tab_next = true
+	MenuController.game_paused = true
+	MenuController.set_pause_state(true)
+	MenuController.show_settings()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+static func is_monitor_sound(node: Node) -> bool:
+	return node is AudioStreamPlayer and node.stream != null and node.stream.resource_path == MONITOR_SOUND
 
 # =============================================================================
 # Title screen replacement

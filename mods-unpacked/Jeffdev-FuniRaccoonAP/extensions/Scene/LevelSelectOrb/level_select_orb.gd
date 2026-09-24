@@ -9,6 +9,7 @@ var _ap_client: ApClient
 func _ready() -> void:
 	_ap_client = ModLoader.get_node("Jeffdev-FuniRaccoonAP").ap_client
 	super()
+	_ap_remove_vehicle()
 	_ap_drop_held_kei_truck()
 	_ap_client.update_map_location_for_cluster(level_cluster_id)
 
@@ -47,6 +48,17 @@ func _ap_destination(level_id: level_changer.LEVEL_ID) -> level_changer.LEVEL_ID
 		return level_id
 	ApChatPopup.show_message(LevelAccessGuard.locked_message(level_id, connected, have), get_tree().get_root())
 	return level_changer.LEVEL_ID.MAIN_MENU
+
+func _ap_remove_vehicle() -> void:
+	var player = Globals.get_player()
+	if not is_instance_valid(player) or player.truck == null:
+		return
+	var vehicle: Node = player.truck
+	player.truck = null
+	player.player_in_truck = false
+	Globals.player_inst.main_player_camera.set_cull_mask_value(3, false)
+	Globals.got_in_car.emit(false)
+	vehicle.queue_free()
 
 # The kei truck can't go through the orb, so take it out of the player's hands.
 func _ap_drop_held_kei_truck() -> void:

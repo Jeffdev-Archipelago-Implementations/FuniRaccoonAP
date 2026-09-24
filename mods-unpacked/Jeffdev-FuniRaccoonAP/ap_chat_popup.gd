@@ -1,150 +1,35 @@
 ## Chat popup manager for AP PrintJSON messages.
-## Shows up to MAX_MESSAGES stacked in the bottom-left corner, newest on bottom.
-## When a 5th message arrives the oldest (top) is evicted immediately.
-## Press F6 to toggle visibility.
 extends CanvasLayer
 
 const MAX_MESSAGES = 4
 const MESSAGE_DURATION = 7.5
-const HELP_KEY = KEY_F1
-const TOGGLE_KEY = KEY_F6
-const GOAL_KEY = KEY_F2
-const POPUP_TOGGLE_KEY = KEY_F5
-const FILTER_KEY = KEY_F4
-const MONITOR_SOUND_KEY = KEY_F7
 
-const HELP_MESSAGE = "Controls: [color=#FAFAD2]F1[/color]: Help | [color=#FAFAD2]F2[/color]: Goal | [color=#FAFAD2]F4[/color]: Filter Messages | [color=#FAFAD2]F5[/color]: Toggle Popups | [color=#FAFAD2]F6[/color]: Toggle Messages | [color=#FAFAD2]F7[/color]: Make The Settings Menu Shut Up"
+const HELP_MESSAGE = "Press [color=#FAFAD2]F1[/color] to open the Archipelago tracker and settings."
 
 const META_CHAT_VISIBLE = "ap_chat_visible"
 const META_CHAT_RELEVANT_ONLY = "ap_chat_relevant_only"
-const META_ITEM_POPUPS_ENABLED = "ap_item_popups_enabled"
-const META_MONITOR_SOUND_MUTED = "ap_monitor_sound_muted"
 
-# The CRT startup noise that autoplays on the settings screens.
-const MONITOR_SOUND = "res://Audio/SoundEffects/computer/facuarmo__286-startup.ogg"
 static var _manager: CanvasLayer = null
 static var _vbox: VBoxContainer = null
 static var _messages: Array = []  # Active RichTextLabel nodes
 static var _chat_visible: bool = true
 static var _relevant_only: bool = false
-static var _hiding: bool = false
 
-func _input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == HELP_KEY:
-			show_message(HELP_MESSAGE, get_tree().get_root())
-		elif event.keycode == TOGGLE_KEY:
-			_chat_visible = not _chat_visible
-			Globals.save_file.set_meta(META_CHAT_VISIBLE, _chat_visible)
-			Globals.save_game()
-			var notice := "Showing AP Messages" if _chat_visible else "Hiding AP Messages"
-			_vbox.visible = true
-			_hiding = false
-			show_message(notice, get_tree().get_root())
-			if not _messages.is_empty() and is_instance_valid(_messages.back()):
-				_messages.back().visible = true
-			if not _chat_visible:
-				_hiding = true
-				get_tree().create_timer(MESSAGE_DURATION + 0.7).timeout.connect(func():
-					_hiding = false
-					if not _chat_visible and is_instance_valid(_vbox):
-						_vbox.visible = false
-				)
-		elif event.keycode == POPUP_TOGGLE_KEY:
-			var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_item_popup.gd")
-			popup_script._enabled = not popup_script._enabled
-			Globals.save_file.set_meta(META_ITEM_POPUPS_ENABLED, popup_script._enabled)
-			Globals.save_game()
-			var state := "Enabled" if popup_script._enabled else "Disabled"
-			if not popup_script._enabled:
-				popup_script.clear_all()
-			show_message("[color=#FAFAD2]Item Popups: %s[/color]" % state, get_tree().get_root())
-		elif event.keycode == MONITOR_SOUND_KEY:
-			var muted: bool = not Globals.save_file.get_meta(META_MONITOR_SOUND_MUTED, false)
-			Globals.save_file.set_meta(META_MONITOR_SOUND_MUTED, muted)
-			Globals.save_game()
-			if muted:
-				for player in get_tree().root.find_children("*", "AudioStreamPlayer", true, false):
-					if is_monitor_sound(player):
-						player.stop()
-			show_message("[color=#FAFAD2]Monitor Sound: %s[/color]" % ("Muted" if muted else "On"), get_tree().get_root())
-		elif event.keycode == FILTER_KEY:
-			_relevant_only = not _relevant_only
-			Globals.save_file.set_meta(META_CHAT_RELEVANT_ONLY, _relevant_only)
-			Globals.save_game()
-			# Re-apply visibility to messages already on screen.
-			for m in _messages:
-				if is_instance_valid(m):
-					var rel: bool = m.get_meta("ap_relevant", true)
-					m.visible = _chat_visible and (rel or not _relevant_only)
-			var filter_state := "Showing Your Messages Only" if _relevant_only else "Showing All Messages"
-			show_message("[color=#FAFAD2]%s[/color]" % filter_state, get_tree().get_root())
-		elif event.keycode == GOAL_KEY:
-			var ap_client = ModLoader.get_node("Jeffdev-FuniRaccoonAP").ap_client
-			if not is_instance_valid(ap_client):
-				return
-			_clear_messages()
-			if Globals.save_file.get_meta("ap_goal_complete", false):
-				show_message("[color=#00FF7F]GOAL COMPLETE![/color]", get_tree().get_root())
-				return
-			var required_goals: Array = ap_client.get_required_goals()
-			if required_goals.is_empty():
-				show_message("[color=#FAFAD2]No goals configured.[/color]", get_tree().get_root())
-				return
-			var stored: Array = Globals.save_file.items_stored
-			var count: int = stored.size()
-			var goal_threshold: int = ap_client.slot_threshold_for(50)
-			var chk := func(label: String, item_id) -> String:
-				var has_it: bool = stored.has(item_id)
-				return "[color=%s]%s %s[/color]" % ["#00FF7F" if has_it else "#EE0000", "✓" if has_it else "✗", label]
-			var received_jewels: Array = Globals.save_file.get_meta("ap_received_jewels", [])
-			var chk_jewel := func(label: String, ap_item_id: int) -> String:
-				var has_it: bool = received_jewels.has(ap_item_id)
-				return "[color=%s]%s %s[/color]" % ["#00FF7F" if has_it else "#EE0000", "✓" if has_it else "✗", label]
-			var rods := func() -> String:
-				var parts: PackedStringArray = []
-				for pair in [
-					["Base", item_tracker.item_id.COOLING_ROD],
-					["Plimbo", item_tracker.item_id.COOLING_ROD_PLIMBO],
-					["King", item_tracker.item_id.COOLING_ROD_FRIDGE_KING],
-				]:
-					parts.append(chk.call(pair[0], pair[1]))
-				return "Rods: " + " ".join(parts)
-			var gems := func() -> String:
-				var parts: PackedStringArray = []
-				for pair in [["Green", 601], ["Blue", 602], ["Purple", 603], ["Red", 604]]:
-					parts.append(chk_jewel.call(pair[0], pair[1]))
-				return "Gems: " + " ".join(parts)
-			var msg := "[color=#FAFAD2]Goals (all required to win)[/color]\n"
-			for goal in required_goals:
-				var done: bool = ap_client.is_goal_completed(goal)
-				var header_color := "#00FF7F" if done else "#FAFAD2"
-				var done_mark := " [DONE]" if done else ""
-				match goal:
-					"orb":
-						msg += "\n[color=%s]Orb%s[/color] - %d/%d items\n" % [header_color, done_mark, count, goal_threshold]
-						msg += chk.call("Orb", item_tracker.item_id.ORB) + "\n"
-						msg += rods.call()
-					"museum":
-						msg += "\n[color=%s]Museum%s[/color] - %d/100 items\n" % [header_color, done_mark, count]
-						msg += chk.call("Waffle", item_tracker.item_id.WAFFLE) + "\n"
-						msg += rods.call()
-					"fellowship":
-						msg += "\n[color=%s]Fellowship%s[/color] - %d/%d items\n" % [header_color, done_mark, count, goal_threshold]
-						msg += chk.call("Priestess", item_tracker.item_id.PRIESTESS) + "\n"
-						msg += chk.call("Greenie", item_tracker.item_id.GREENIE) + "\n"
-						msg += rods.call()
-					"lugh":
-						msg += "\n[color=%s]Lugh%s[/color] - %d/%d items\n" % [header_color, done_mark, count, goal_threshold]
-						msg += gems.call()
-					_:
-						msg += "\n[color=%s]%s%s[/color]" % [header_color, str(goal), done_mark]
-			show_message(msg, get_tree().get_root())
+static func set_chat_visible(value: bool) -> void:
+	_chat_visible = value
+	Globals.save_file.set_meta(META_CHAT_VISIBLE, value)
+	Globals.save_game()
+	if is_instance_valid(_vbox):
+		_vbox.visible = value
 
-
-static func is_monitor_sound(node: Node) -> bool:
-	return node is AudioStreamPlayer and node.stream != null and node.stream.resource_path == MONITOR_SOUND
-
+static func set_relevant_only(value: bool) -> void:
+	_relevant_only = value
+	Globals.save_file.set_meta(META_CHAT_RELEVANT_ONLY, value)
+	Globals.save_game()
+	# Re-apply visibility to messages already on screen.
+	for m in _messages:
+		if is_instance_valid(m):
+			m.visible = _chat_visible and (m.get_meta("ap_relevant", true) or not _relevant_only)
 
 static func _clear_messages() -> void:
 	for msg in _messages:
@@ -157,9 +42,7 @@ static func clear_all() -> void:
 	_clear_messages()
 
 static func show_message(bbcode_text: String, root: Node, relevant := true) -> void:
-	if _hiding:
-		return
-	# When the "your messages only" filter (F4) is on, drop irrelevant AP messages.
+	# When the "your messages only" filter is on, drop irrelevant AP messages.
 	# Mod-generated messages default to relevant := true so they always show.
 	if _relevant_only and not relevant:
 		return
@@ -193,12 +76,10 @@ static func _create_manager(root: Node) -> void:
 	_manager.add_child(_vbox)
 	root.add_child(_manager)
 
-	# Load persisted function-key toggles from save meta and apply.
+	# Load the persisted settings page toggles from save meta and apply.
 	_chat_visible = Globals.save_file.get_meta(META_CHAT_VISIBLE, _chat_visible)
 	_relevant_only = Globals.save_file.get_meta(META_CHAT_RELEVANT_ONLY, _relevant_only)
 	_vbox.visible = _chat_visible
-	var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_item_popup.gd")
-	popup_script._enabled = Globals.save_file.get_meta(META_ITEM_POPUPS_ENABLED, popup_script._enabled)
 
 static func _add_label(bbcode_text: String, relevant := true) -> void:
 	var label := RichTextLabel.new()

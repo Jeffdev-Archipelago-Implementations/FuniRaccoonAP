@@ -198,12 +198,13 @@ const HATS: Dictionary = {
 	507: hats_logic.hat_enum.CrownHat,    # Fridge Crown
 	508: hats_logic.hat_enum.PaddyHat,    # Patty Hat
 }
-const JEWELS: Dictionary = {
-	601: "jewel_1_eaten",  # Green
-	602: "jewel_2_eaten",  # Blue
-	603: "jewel_3_eaten",  # Purple
-	604: "jewel_4_eaten",  # Red
-}
+const PROGRESSIVE_JEWEL := 601
+const JEWELS_ORDER: Array = [
+	"jewel_1_eaten",
+	"jewel_2_eaten",
+	"jewel_3_eaten",
+	"jewel_4_eaten"
+] 
 const POLICE_TRAP := 701
 const PHONE_RATIO_TRAP := 702
 const BRAZIL_TRAIN_TICKET := 800

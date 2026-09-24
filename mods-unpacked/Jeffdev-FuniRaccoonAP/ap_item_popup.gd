@@ -5,11 +5,18 @@ var _sender_name: String = ""
 
 static var _queue: Array = []
 static var _showing: bool = false
-static var _enabled: bool = true
 static var _current_popup: CanvasLayer = null
 
+const META_ITEM_POPUPS_ENABLED = "ap_item_popups_enabled"
+
+static func set_item_popups_enabled(value: bool) -> void:
+	Globals.save_file.set_meta(META_ITEM_POPUPS_ENABLED, value)
+	Globals.save_game()
+	if not value:
+		clear_all()
+
 static func show_popup(item_name: String, sender_name: String, root: Node) -> void:
-	if not _enabled:
+	if not Globals.save_file.get_meta(META_ITEM_POPUPS_ENABLED, true):
 		return
 	_queue.append({"item_name": item_name, "sender_name": sender_name, "root": root})
 	if not _showing:
@@ -33,8 +40,7 @@ static func _show_next() -> void:
 	_current_popup = popup
 	root.add_child(popup)
 
-## Drops any queued item popups and immediately removes whichever one is on screen, so nothing
-## from a previous connection lingers or shows up after disconnecting from Archipelago.
+## Clear out any currently running popups
 static func clear_all() -> void:
 	_queue.clear()
 	_showing = false

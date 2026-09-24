@@ -1,31 +1,35 @@
 {
-	"name": "FuniRaccoonAP",
-	"namespace": "Jeffdev",
-	"version_number": "1.7.3",
-	"description": "Archipelago MultiWorld Client",
-	"website_url": "",
 	"dependencies": [],
+	"description": "Archipelago MultiWorld Client",
 	"extra": {
 		"godot": {
-			"incompatibilities": [],
 			"authors": [
 				"Jeffdev"
 			],
-			"compatible_mod_loader_version": [
-                "7.0.0"
-			],
 			"compatible_game_version": [
-                "0.0.0"
+				"0.0.0"
+			],
+			"compatible_mod_loader_version": [
+				"7.0.0"
 			],
 			"config_schema": {
 				"$schema": "https://json-schema.org/draft/2020-12/schema",
-				"title": "Archipelago Config",
 				"description": "Configuration for the Archipelago Client mod",
-				"type": "object",
 				"properties": {
+					"ap_password": {
+						"default": "",
+						"minLength": 0.0,
+						"title": "Archipelago Password",
+						"type": "string"
+					},
+					"ap_player": {
+						"default": "Player",
+						"maxLength": 16.0,
+						"minLength": 1.0,
+						"title": "Archipelago Player",
+						"type": "string"
+					},
 					"ap_server": {
-						"title": "Archipelago Server",
-						"type": "string",
 						"anyOf": [
 							{
 								"format": "hostname"
@@ -40,24 +44,25 @@
 								"format": "ipv6"
 							}
 						],
-						"minLength": 1,
-						"default": "archipelago.gg"
-					},
-					"ap_player": {
-						"title": "Archipelago Player",
-						"type": "string",
-						"minLength": 1,
-						"maxLength": 16,
-						"default": "Player"
-					},
-					"ap_password": {
-						"title": "Archipelago Password",
-						"type": "string",
-						"minLength": 0,
-						"default": ""
+						"default": "archipelago.gg",
+						"minLength": 1.0,
+						"title": "Archipelago Server",
+						"type": "string"
 					}
-				}
-			}
+				},
+				"title": "Archipelago Config",
+				"type": "object"
+			},
+			"description_rich": "",
+			"image": null,
+			"incompatibilities": [],
+			"load_before": [],
+			"optional_dependencies": [],
+			"tags": []
 		}
-	}
+	},
+	"name": "FuniRaccoonAP",
+	"namespace": "Jeffdev",
+	"version_number": "1.8.0",
+	"website_url": ""
 }

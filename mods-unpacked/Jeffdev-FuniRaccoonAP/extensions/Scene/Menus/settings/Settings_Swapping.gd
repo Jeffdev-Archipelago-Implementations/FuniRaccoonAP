@@ -4,6 +4,8 @@ extends "res://Scene/Menus/settings/Settings_Swapping.gd"
 const AP_MENU := 4
 const AP_PAGE_SCENE := "res://mods-unpacked/Jeffdev-FuniRaccoonAP/scenes/settings_seg_archipelago.tscn"
 
+static var open_ap_tab_next := false
+
 var ap_settings: Control
 var ap_button: Button
 var color_rect_ap: ColorRect
@@ -41,6 +43,9 @@ func _add_ap_tab() -> void:
 	ap_settings.hide()
 
 func change_menu(item: menu_item):
+	if open_ap_tab_next:
+		open_ap_tab_next = false
+		item = AP_MENU as menu_item
 	if item == AP_MENU:
 		currentmenu = item
 		audio_settings.hide()

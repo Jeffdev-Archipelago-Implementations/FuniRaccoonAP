@@ -4,6 +4,9 @@ const TROLLEY_LOGO_UID := "uid://cads36fss47rk"
 const TROLLEY_MENU_SCALE := 0.75
 const TROLLEY_MENU_LIFT := 0.50
 
+# To be perfectly honest, this is probably somewhat sloppy and I'm lazy, so I'm letting the AI take the reigns
+# on this one. Seems to work fine though, no issues as far as I can spot
+
 func _ready() -> void:
 	super()
 	_ap_add_trolley()
