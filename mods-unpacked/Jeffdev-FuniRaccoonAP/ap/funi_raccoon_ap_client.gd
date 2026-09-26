@@ -101,6 +101,10 @@ func _on_received_items(command: Dictionary) -> void:
 					get_player_name(int(item.get("player", 0))),
 					get_tree().get_root()
 				)
+				if ap_item_id == Ids.EURO_10:
+					_play_euro_effect(10.0)
+				elif ap_item_id == Ids.EURO_100:
+					_play_euro_effect(100.0)
 
 		item_received.emit(item_name, item)
 		next_index = index + 1
@@ -108,6 +112,12 @@ func _on_received_items(command: Dictionary) -> void:
 
 	if changed:
 		Globals.save_game()
+
+func _play_euro_effect(amount: float) -> void:
+	var raccoon_player: PlayerScript = Globals.get_player()
+	if not is_instance_valid(raccoon_player) or not is_instance_valid(LevelChanger.current_level):
+		return
+	EffectsSpawner.spawn_money_effect(raccoon_player.global_position, amount, raccoon_player)
 
 func _item_name(ap_item_id: int) -> String:
 	if not data_package:
@@ -144,6 +154,8 @@ func _grant_item(id: int) -> String:
 	if Ids.KEI_TRUCK_UPGRADES.has(id):
 		return _grant_unique(save.truck_upgrades, Ids.KEI_TRUCK_UPGRADES[id], Ids.KEI_TRUCK_UPGRADES[id])
 	if Ids.HATS.has(id):
+		if not save.purchased_hats.has(Ids.HATS[id]):
+			save.purchased_hats.append(Ids.HATS[id])
 		return _grant_unique(save.unlocked_hats, Ids.HATS[id], "Hat")
 	if id == Ids.PROGRESSIVE_JEWEL:
 		return _grant_mystical_jewel()

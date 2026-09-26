@@ -20,7 +20,7 @@ func update_text(icon: level_select_icon) -> void:
 	for item_id in icon.items:
 		if ap_stored.has(item_id):
 			sent += 1
-	items_got_text.text = "[shake]Checks Sent: %d/%d" % [sent, icon.items.size()]
+	items_got_text.text = "[shake]Dumpster Items Sent: %d/%d" % [sent, icon.items.size()]
 
 func _input(event: InputEvent) -> void:
 	if transition_to_level_started:

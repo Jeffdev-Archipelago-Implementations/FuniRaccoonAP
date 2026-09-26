@@ -23,6 +23,16 @@ const SETTINGS_SWAPPING_SCRIPT = "res://Scene/Menus/settings/Settings_Swapping.g
 const MONITOR_SOUND = "res://Audio/SoundEffects/computer/facuarmo__286-startup.ogg"
 const META_MONITOR_SOUND_MUTED = "ap_monitor_sound_muted"
 
+const EXTRA_LEVEL_ITEMS := {
+	"res://Scene/Levels/petrol_station/petrol_station.tscn": [item_tracker.item_id.LIGHTNING_ROD, 185], # Gacha Machine
+	"res://Scene/Levels/inside_the_machine/inside_the_machine.tscn": [item_tracker.item_id.GOO],
+	"res://Scene/Levels/cave/caves.tscn": [item_tracker.item_id.MICHI_CAT],
+	"res://Scene/Levels/BlimboCity/BlimboCity.tscn": [item_tracker.item_id.PATRICK_OHARA, item_tracker.item_id.APPLE],
+	"res://Scene/Levels/Norwich/norwich.tscn": [item_tracker.item_id.HINTBLO],
+	"res://Scene/Levels/museum/the_museum.tscn": [item_tracker.item_id.HINTBLO],
+	"res://Scene/Levels/TheFactory/TheFactory.tscn": [item_tracker.item_id.HINTBLO]
+}
+
 # Unused/unnamed content ids we have to manually name here
 const GACHA_MACHINE_ITEM_ID := 185
 const TROLLEY_VEHICLE_ID := 5
@@ -98,6 +108,8 @@ func _init() -> void:
 		"res://Scene/Objects/brob_energy/brob_energy.tscn",
 		"res://Scene/Menus/setup/store_page.tscn",
 		"res://Scene/Menus/funiRaccoonDelux.tscn",
+		"res://Scene/Player Stuff/menu/items_left_new.tscn",
+		"res://Scene/Menus/pause_menu.tscn",
 	]:
 		ModLoaderMod.refresh_scene(scene_path)
 
@@ -116,6 +128,18 @@ func _init() -> void:
 			root.get_node(node_path).texture = title_tex
 		return root)
 
+	ModLoaderMod.extend_scene("res://Scene/Levels/BlimboVillage/BlimboVillage.tscn", func(root: Node) -> Node:
+		root.items_in_levels.erase(item_tracker.item_id.BUISNESS_MAN)
+		return root)
+
+	for scene_path in EXTRA_LEVEL_ITEMS:
+		var extra: Array = EXTRA_LEVEL_ITEMS[scene_path]
+		ModLoaderMod.extend_scene(scene_path, func(root: Node) -> Node:
+			for id in extra:
+				if not root.items_in_levels.has(id):
+					root.items_in_levels.append(id)
+			return root)
+
 
 func _find_scripts(dir_path: String) -> Array[String]:
 	var scripts: Array[String] = []
@@ -127,6 +151,8 @@ func _find_scripts(dir_path: String) -> Array[String]:
 	return scripts
 
 func _ready() -> void:
+	# Has to load after some of the other ones, this loads it after _init
+	_take_over_path("res://Scene/photobooth/photobooth.tscn", "res://mods-unpacked/Jeffdev-FuniRaccoonAP/scenes/photobooth.tscn")
 	# Defer setup until all the autoloads are ready
 	_setup.call_deferred()
 

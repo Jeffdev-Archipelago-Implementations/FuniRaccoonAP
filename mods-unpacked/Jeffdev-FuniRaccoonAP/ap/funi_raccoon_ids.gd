@@ -311,6 +311,115 @@ const EURO_LOCATIONS: Dictionary = {
 	"/root/Level_Container/money/money100":      8047,  # Brazil: Euro on middle hill
 	"/root/Node3D/money/money30":                8048,  # Hat Store: Euro reward after saving Toastie
 }
+
+# level_changer.LEVEL_ID -> euro/cat/hat AP location ids found in that map
+const LEVEL_CHECKS: Dictionary = {
+	level_changer.LEVEL_ID.NORWICH: {
+		"euros": [8001, 8002],
+		"cats": [5002], # Michelle Cat
+		"hats": [6001], # Sun Hat
+	},
+	level_changer.LEVEL_ID.GYM_INSIDE: {
+		"euros": [8004, 8005, 8006, 8007],
+		"cats": [5003], # Concrete Cat
+		"hats": [],
+	},
+	level_changer.LEVEL_ID.TYRE_SHOP: {
+		"euros": [8008],
+		"cats": [],
+		"hats": [],
+	},
+	level_changer.LEVEL_ID.CHICKEN_LEVEL: {
+		"euros": [8003],
+		"cats": [],
+		"hats": [6002], # Sombrero
+	},
+	level_changer.LEVEL_ID.HAT_STORE: {
+		"euros": [8048],
+		"cats": [],
+		"hats": [],
+	},
+	level_changer.LEVEL_ID.WATER_ZONE: {
+		"euros": [8009],
+		"cats": [5004], # Gizmo Cat
+		"hats": [],
+	},
+	level_changer.LEVEL_ID.MUSEUM: {
+		"euros": [],
+		"cats": [],
+		"hats": [6003], # Top Hat
+	},
+	level_changer.LEVEL_ID.MONITOR_ROOM: { # Chamber
+		"euros": [],
+		"cats": [5001], # Michi Cat
+		"hats": [],
+	},
+	level_changer.LEVEL_ID.BEENIE_FACTORY_P2: { # The Proccess
+		"euros": [],
+		"cats": [],
+		"hats": [6004], # Jester Hat
+	},
+	level_changer.LEVEL_ID.TRAIN_STATION: { # Underground Metro
+		"euros": [],
+		"cats": [5005], # Keksz Cat
+		"hats": [],
+	},
+	level_changer.LEVEL_ID.BEENIE_JESUS: { # Beenies Ascension
+		"euros": [8010],
+		"cats": [],
+		"hats": [],
+	},
+	level_changer.LEVEL_ID.BLIMBO_VILLAGE: {
+		"euros": [8025],
+		"cats": [],
+		"hats": [6006], # Media Player Hat
+	},
+	level_changer.LEVEL_ID.CAVE: { # Billdal Mines
+		"euros": [],
+		"cats": [5006], # Boingler Cat
+		"hats": [],
+	},
+	level_changer.LEVEL_ID.BLIMBO_FOREST: {
+		"euros": [],
+		"cats": [],
+		"hats": [6005], # Raccoon Hat
+	},
+	level_changer.LEVEL_ID.PARKING_LOT: { # Trasco Carpark
+		"euros": [8012, 8013, 8014],
+		"cats": [],
+		"hats": [],
+	},
+	level_changer.LEVEL_ID.BLIMBO_CITY: {
+		"euros": [8015, 8016, 8017, 8018, 8019, 8020, 8021, 8022, 8023, 8024],
+		"cats": [],
+		"hats": [],
+	},
+	level_changer.LEVEL_ID.PUB: {
+		"euros": [],
+		"cats": [],
+		"hats": [6008], # Patty Hat
+	},
+	level_changer.LEVEL_ID.CANYON: {
+		"euros": [8011],
+		"cats": [],
+		"hats": [],
+	},
+	level_changer.LEVEL_ID.DESERT: {
+		"euros": [8034, 8035, 8036, 8037, 8038, 8039, 8040, 8041, 8042, 8043, 8044, 8045, 8046],
+		"cats": [],
+		"hats": [6007], # Fridge Crown
+	},
+	level_changer.LEVEL_ID.DESERT_CONNECTION: { # Municipal Wastes
+		"euros": [8027, 8028, 8029, 8030, 8031, 8032, 8033],
+		"cats": [],
+		"hats": [],
+	},
+	level_changer.LEVEL_ID.BRAZIL: {
+		"euros": [8047],
+		"cats": [],
+		"hats": [],
+	},
+}
 const SPEEDWAY_LOCATION := 9001
 const VEHICLE_LOCATIONS: Dictionary = {
 	SaveGame.vehicles.TONY: 9002,
