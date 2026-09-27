@@ -1,0 +1,444 @@
+[gd_scene format=3 uid="uid://bdxtcxbeeryia"]
+
+[ext_resource type="Script" uid="uid://cw0qd2eusb14s" path="res://mods-unpacked/Jeffdev-FuniRaccoonAP/scenes/settings_seg_archipelago.gd" id="1"]
+[ext_resource type="Theme" uid="uid://bnbdrri8wb4j4" path="res://Shaders/computer_screen_font.tres" id="2"]
+[ext_resource type="Script" uid="uid://c6moekms5naxq" path="res://Scene/Menus/settings/appear_code.gd" id="2_fq4bt"]
+[ext_resource type="Texture2D" uid="uid://c75g6u7tjijd2" path="res://Sprites/icons/orb.png" id="3_rkcen"]
+[ext_resource type="Script" uid="uid://mmgo8uujso83" path="res://mods-unpacked/Jeffdev-FuniRaccoonAP/scenes/ap_settings_toggle.gd" id="4_nlnbd"]
+[ext_resource type="Texture2D" uid="uid://unnewhwcmq" path="res://Sprites/icon_game/waffle.png" id="4_nr0fb"]
+[ext_resource type="Texture2D" uid="uid://dyhyhyjkxueif" path="res://Sprites/icons/greenie.png" id="5_67o2v"]
+[ext_resource type="PackedScene" uid="uid://bdm4hg0t1ji4s" path="res://Scene/Menus/butten_press.tscn" id="5_y03s5"]
+[ext_resource type="Texture2D" uid="uid://bnghcbtk3rtbn" path="res://Models/priest/preist_icon.png" id="6_mg74b"]
+[ext_resource type="Texture2D" uid="uid://wwca5gfktbkt" path="res://Sprites/icons/kei_truck_icon.png" id="7_l08mo"]
+[ext_resource type="Texture2D" uid="uid://k0kvicivds3w" path="res://mods-unpacked/Jeffdev-FuniRaccoonAP/images/boost.png" id="8_1jg3b"]
+[ext_resource type="Texture2D" uid="uid://bggmbqqfmjlv4" path="res://Sprites/dumbell/funbells.png" id="8_mg74b"]
+[ext_resource type="Texture2D" uid="uid://db8c1odnvxfj8" path="res://Sprites/icons/cooling_rod.png" id="8_nfh8h"]
+[ext_resource type="Texture2D" uid="uid://bkrp31ji7jglo" path="res://Scene/Objects/toaster/toaster_icon.png" id="9_1lfx7"]
+[ext_resource type="Texture2D" uid="uid://tcmhe6q5nnhj" path="res://Sprites/vehicle_sprites/Paper_doll_Funi_Raccoon_Game_Tony.png" id="10_jc0sc"]
+[ext_resource type="Texture2D" uid="uid://c018if2r0mink" path="res://Sprites/icons/jewel_icon.png" id="11_w2vtf"]
+[ext_resource type="Texture2D" uid="uid://dwvkme4j1bi7" path="res://Sprites/icons/mines_key.png" id="13_jc0sc"]
+[ext_resource type="Texture2D" uid="uid://c41qhj5l4g0qp" path="res://Scene/Objects/radio/radio_radio.png" id="13_l08mo"]
+[ext_resource type="Texture2D" uid="uid://cys63w0wwgofl" path="res://Sprites/sam_key/sam_key_icon.png" id="14_w2vtf"]
+[ext_resource type="Texture2D" uid="uid://d2uk78mnn167y" path="res://mods-unpacked/Jeffdev-FuniRaccoonAP/images/goo.png" id="15_dyxis"]
+[ext_resource type="Texture2D" uid="uid://cmkvbsyca4u8c" path="res://Sprites/chicken_chance/chicken_sprite_funi_racoon.png" id="16_5wsef"]
+[ext_resource type="Texture2D" uid="uid://blwrhrn5edd3g" path="res://Scene/Objects/brob_energy/brob.png" id="17_0ib6d"]
+[ext_resource type="Texture2D" uid="uid://ch355pif8wfw2" path="res://Models/pickaxe/pickaxe(3)_pickaxe.png" id="18_wv3gv"]
+[ext_resource type="Texture2D" uid="uid://mrlsu0r6m1e5" path="res://Scene/props/butterfly/butterfly.png" id="19_th56d"]
+[ext_resource type="Texture2D" uid="uid://ittyrj105luv" path="res://Sprites/icons/gun_icon.png" id="22_fg06h"]
+[ext_resource type="Texture2D" uid="uid://c1oa3k5rapukk" path="res://Sprites/beenie/raccoon/raccoon_plushie_front.png" id="23_fq4bt"]
+[ext_resource type="Texture2D" uid="uid://chn78wahgofae" path="res://Sprites/icons/flowian.png" id="24_nlnbd"]
+[ext_resource type="Texture2D" uid="uid://dnjoafeugya3u" path="res://Models/anti_sads/anti-sads_pills_box.png" id="25_y03s5"]
+[ext_resource type="Texture2D" uid="uid://weq1vclxkh1e" path="res://mods-unpacked/Jeffdev-FuniRaccoonAP/images/brazil.png" id="26_b1w7m"]
+[ext_resource type="Texture2D" uid="uid://dxpwj7yru3bua" path="res://Sprites/icons/wriks_god.png" id="28_fg06h"]
+
+[node name="ArchipelagoSettings" type="Control" unique_id=376749757]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=1551520940]
+layout_mode = 0
+offset_left = 30.0
+offset_top = 20.0
+offset_right = 290.0
+offset_bottom = 434.0
+script = ExtResource("2_fq4bt")
+
+[node name="Title" type="RichTextLabel" parent="VBoxContainer" unique_id=1907192844]
+layout_mode = 2
+theme = ExtResource("2")
+theme_override_colors/default_color = Color(0.659007, 0, 0, 1)
+bbcode_enabled = true
+text = "[u]Archipelago[/u]"
+fit_content = true
+
+[node name="StatusLabel" type="Label" parent="VBoxContainer" unique_id=1449281259]
+layout_mode = 2
+theme = ExtResource("2")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+text = "Connection Status: "
+
+[node name="StatusLabelEntry" type="Label" parent="VBoxContainer" unique_id=1427315691]
+unique_name_in_owner = true
+layout_mode = 2
+theme = ExtResource("2")
+theme_override_colors/font_color = Color(1, 0, 0, 1)
+text = "DISCONNECTED"
+
+[node name="Spacing" type="Label" parent="VBoxContainer" unique_id=2011769544]
+layout_mode = 2
+theme = ExtResource("2")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+
+[node name="SlotNameLabel" type="Label" parent="VBoxContainer" unique_id=349129791]
+layout_mode = 2
+theme = ExtResource("2")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+text = "Slot Name:"
+
+[node name="SlotNameLabelEntry" type="Label" parent="VBoxContainer" unique_id=1192083832]
+unique_name_in_owner = true
+layout_mode = 2
+theme = ExtResource("2")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+text = "Player"
+
+[node name="Spacing2" type="Label" parent="VBoxContainer" unique_id=1503866955]
+layout_mode = 2
+theme = ExtResource("2")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+
+[node name="ChecksLabel" type="Label" parent="VBoxContainer" unique_id=1544068189]
+layout_mode = 2
+theme = ExtResource("2")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+text = "Checks:"
+
+[node name="ChecksLabelEntry" type="Label" parent="VBoxContainer" unique_id=1699399935]
+unique_name_in_owner = true
+layout_mode = 2
+theme = ExtResource("2")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+text = "0/0"
+
+[node name="Spacing3" type="Label" parent="VBoxContainer" unique_id=1271201681]
+layout_mode = 2
+theme = ExtResource("2")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+
+[node name="DumpsterLabel" type="Label" parent="VBoxContainer" unique_id=827198504]
+layout_mode = 2
+theme = ExtResource("2")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+text = "Dumpster Items:"
+
+[node name="DumpsterLabelEntry" type="Label" parent="VBoxContainer" unique_id=165956729]
+unique_name_in_owner = true
+layout_mode = 2
+theme = ExtResource("2")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+text = "10"
+
+[node name="Spacing4" type="Label" parent="VBoxContainer" unique_id=359963034]
+layout_mode = 2
+theme = ExtResource("2")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+
+[node name="VBoxContainer3" type="VBoxContainer" parent="." unique_id=1294551886 node_paths=PackedStringArray("extra_button")]
+layout_mode = 0
+offset_left = 29.0
+offset_top = 288.0
+offset_right = 289.0
+offset_bottom = 542.0
+focus_neighbor_right = NodePath("../VBoxContainer2")
+script = ExtResource("2_fq4bt")
+extra_button = NodePath("Filter Messages")
+extra_item = true
+
+[node name="Archipelago Settings" type="RichTextLabel" parent="VBoxContainer3" unique_id=313501238]
+layout_mode = 2
+theme = ExtResource("2")
+theme_override_colors/default_color = Color(0.659007, 0, 0, 1)
+bbcode_enabled = true
+text = "[u]Archipelago Settings[/u]"
+fit_content = true
+
+[node name="Filter Messages" type="CheckBox" parent="VBoxContainer3" unique_id=99731312]
+layout_mode = 2
+focus_neighbor_left = NodePath(".")
+focus_neighbor_right = NodePath(".")
+focus_neighbor_bottom = NodePath("../Hide AP Messages")
+theme = ExtResource("2")
+text = "Filter AP Messages"
+script = ExtResource("4_nlnbd")
+setting = 0
+
+[node name="butten_press" parent="VBoxContainer3/Filter Messages" unique_id=16633875 instance=ExtResource("5_y03s5")]
+
+[node name="Hide AP Messages" type="CheckBox" parent="VBoxContainer3" unique_id=1155530836]
+layout_mode = 2
+focus_neighbor_left = NodePath(".")
+focus_neighbor_top = NodePath("../Filter Messages")
+focus_neighbor_right = NodePath(".")
+focus_neighbor_bottom = NodePath("../Show Item Popups")
+theme = ExtResource("2")
+text = "Hide AP Messages"
+script = ExtResource("4_nlnbd")
+setting = 1
+
+[node name="butten_press" parent="VBoxContainer3/Hide AP Messages" unique_id=661633451 instance=ExtResource("5_y03s5")]
+
+[node name="Show Item Popups" type="CheckBox" parent="VBoxContainer3" unique_id=2129031546]
+layout_mode = 2
+focus_neighbor_left = NodePath(".")
+focus_neighbor_top = NodePath("../Hide AP Messages")
+focus_neighbor_right = NodePath(".")
+focus_neighbor_bottom = NodePath(".")
+theme = ExtResource("2")
+text = "Show Item Popups"
+script = ExtResource("4_nlnbd")
+setting = 2
+
+[node name="butten_press" parent="VBoxContainer3/Show Item Popups" unique_id=573712155 instance=ExtResource("5_y03s5")]
+
+[node name="VBoxContainer2" type="VBoxContainer" parent="." unique_id=1668079370]
+layout_mode = 0
+offset_left = 323.0
+offset_top = 20.0
+offset_right = 598.0
+offset_bottom = 434.0
+script = ExtResource("2_fq4bt")
+
+[node name="Title" type="RichTextLabel" parent="VBoxContainer2" unique_id=1538947650]
+layout_mode = 2
+theme = ExtResource("2")
+theme_override_colors/default_color = Color(0.659007, 0, 0, 1)
+bbcode_enabled = true
+text = "[u]Tracker[/u]"
+fit_content = true
+
+[node name="GridContainer" type="GridContainer" parent="VBoxContainer2" unique_id=335534805]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+columns = 6
+
+[node name="OrbTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=1646912474]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Orb"
+texture = ExtResource("3_rkcen")
+expand_mode = 1
+
+[node name="WaffleTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=54212747]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Belgium Waffle"
+texture = ExtResource("4_nr0fb")
+expand_mode = 1
+
+[node name="GreenTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=1588636209]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "GREENISH ABOMINATION"
+texture = ExtResource("5_67o2v")
+expand_mode = 1
+
+[node name="PriestTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=2018998154]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Priestess"
+texture = ExtResource("6_mg74b")
+expand_mode = 1
+
+[node name="JewelTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=103991793]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Mystical Jewels"
+texture = ExtResource("11_w2vtf")
+expand_mode = 2
+
+[node name="RodTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=1361324674]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Cooling Rods"
+texture = ExtResource("8_nfh8h")
+expand_mode = 1
+
+[node name="StrengthTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=894094639]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Mystical Dumbbells"
+texture = ExtResource("8_mg74b")
+expand_mode = 1
+
+[node name="TruckTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=2100854792]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Kei Truck"
+texture = ExtResource("7_l08mo")
+expand_mode = 1
+
+[node name="BoostTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=1502978288]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Kei Truck Boost"
+texture = ExtResource("8_1jg3b")
+expand_mode = 1
+
+[node name="ToastTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=1982158348]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Kei Truck Toaster"
+texture = ExtResource("9_1lfx7")
+expand_mode = 1
+
+[node name="TonyTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=830140870]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Tony Vehicle"
+texture = ExtResource("10_jc0sc")
+expand_mode = 1
+
+[node name="RadioTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=1935101051]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Kei Truck Radio"
+texture = ExtResource("13_l08mo")
+expand_mode = 1
+
+[node name="GooTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=79133015]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Goo"
+texture = ExtResource("15_dyxis")
+expand_mode = 1
+
+[node name="ChickenTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=1413648631]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Chicken"
+texture = ExtResource("16_5wsef")
+expand_mode = 1
+
+[node name="BrobTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=1807009121]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Brob Energy"
+texture = ExtResource("17_0ib6d")
+expand_mode = 1
+
+[node name="PickaxeTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=1956583129]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Pickaxe"
+texture = ExtResource("18_wv3gv")
+expand_mode = 1
+
+[node name="ButterflyTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=876880095]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Butterfly"
+texture = ExtResource("19_th56d")
+expand_mode = 1
+
+[node name="MineKeyTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=1453083199]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Old Ass Rusty Ass Key"
+texture = ExtResource("13_jc0sc")
+expand_mode = 1
+
+[node name="FridgeKeyTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=1175854802]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Fridge Key"
+texture = ExtResource("14_w2vtf")
+expand_mode = 1
+
+[node name="GunTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=920314093]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "unregistered firearm"
+texture = ExtResource("22_fg06h")
+expand_mode = 1
+
+[node name="PlushTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=478341766]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Funi Marketable Plushie"
+texture = ExtResource("23_fq4bt")
+expand_mode = 1
+
+[node name="FlowianTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=1693346183]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Flowian"
+texture = ExtResource("24_nlnbd")
+expand_mode = 1
+
+[node name="AntisadTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=1161415891]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Antisads"
+texture = ExtResource("25_y03s5")
+expand_mode = 1
+
+[node name="BrazilTracker" type="TextureRect" parent="VBoxContainer2/GridContainer" unique_id=992835467]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+tooltip_text = "Brazil Train Ticket"
+texture = ExtResource("26_b1w7m")
+expand_mode = 1
+
+[node name="Spacing3" type="Label" parent="VBoxContainer2" unique_id=1009510440]
+layout_mode = 2
+theme = ExtResource("2")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+
+[node name="Goals" type="RichTextLabel" parent="VBoxContainer2" unique_id=2053993607]
+layout_mode = 2
+theme = ExtResource("2")
+theme_override_colors/default_color = Color(0.659007, 0, 0, 1)
+bbcode_enabled = true
+text = "[u]Goals[/u]"
+fit_content = true
+
+[node name="GridContainer2" type="GridContainer" parent="VBoxContainer2" unique_id=738436065]
+layout_mode = 2
+columns = 4
+
+[node name="Orb" type="TextureRect" parent="VBoxContainer2/GridContainer2" unique_id=1907554903]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(65, 65)
+layout_mode = 2
+tooltip_text = "Orb Ending"
+texture = ExtResource("3_rkcen")
+expand_mode = 1
+
+[node name="Waffle" type="TextureRect" parent="VBoxContainer2/GridContainer2" unique_id=1149135083]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(65, 65)
+layout_mode = 2
+tooltip_text = "Museum Ending"
+texture = ExtResource("4_nr0fb")
+expand_mode = 1
+
+[node name="Priest" type="TextureRect" parent="VBoxContainer2/GridContainer2" unique_id=1397845071]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(65, 65)
+layout_mode = 2
+tooltip_text = "Fellowship Ending"
+texture = ExtResource("6_mg74b")
+expand_mode = 1
+
+[node name="Lugh" type="TextureRect" parent="VBoxContainer2/GridContainer2" unique_id=267894245]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(65, 65)
+layout_mode = 2
+tooltip_text = "Lugh Ending"
+texture = ExtResource("28_fg06h")
+expand_mode = 1

@@ -1,135 +1,35 @@
 ## Chat popup manager for AP PrintJSON messages.
-## Shows up to MAX_MESSAGES stacked in the bottom-left corner, newest on bottom.
-## When a 5th message arrives the oldest (top) is evicted immediately.
-## Press F6 to toggle visibility.
 extends CanvasLayer
 
 const MAX_MESSAGES = 4
 const MESSAGE_DURATION = 7.5
-const HELP_KEY = KEY_F1
-const TOGGLE_KEY = KEY_F6
-const GOAL_KEY = KEY_F2
-const POPUP_TOGGLE_KEY = KEY_F5
-const FILTER_KEY = KEY_F4
 
-const HELP_MESSAGE = "Controls: [color=#FAFAD2]F1[/color]: Help | [color=#FAFAD2]F2[/color]: Goal | [color=#FAFAD2]F4[/color]: Filter Messages | [color=#FAFAD2]F5[/color]: Toggle Popups | [color=#FAFAD2]F6[/color]: Toggle Messages"
+const HELP_MESSAGE = "Press [color=#FAFAD2]F1[/color] to open the Archipelago tracker and settings."
 
 const META_CHAT_VISIBLE = "ap_chat_visible"
 const META_CHAT_RELEVANT_ONLY = "ap_chat_relevant_only"
-const META_ITEM_POPUPS_ENABLED = "ap_item_popups_enabled"
+
 static var _manager: CanvasLayer = null
 static var _vbox: VBoxContainer = null
 static var _messages: Array = []  # Active RichTextLabel nodes
 static var _chat_visible: bool = true
 static var _relevant_only: bool = false
-static var _hiding: bool = false
-static var _ap_client = null
 
-static func set_ap_client(client) -> void:
-	_ap_client = client
+static func set_chat_visible(value: bool) -> void:
+	_chat_visible = value
+	Globals.save_file.set_meta(META_CHAT_VISIBLE, value)
+	Globals.save_game()
+	if is_instance_valid(_vbox):
+		_vbox.visible = value
 
-func _input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == HELP_KEY:
-			show_message(HELP_MESSAGE, get_tree().get_root())
-		elif event.keycode == TOGGLE_KEY:
-			_chat_visible = not _chat_visible
-			Globals.save_file.set_meta(META_CHAT_VISIBLE, _chat_visible)
-			Globals.save_game()
-			var notice := "Showing AP Messages" if _chat_visible else "Hiding AP Messages"
-			_vbox.visible = true
-			_hiding = false
-			show_message(notice, get_tree().get_root())
-			if not _messages.is_empty() and is_instance_valid(_messages.back()):
-				_messages.back().visible = true
-			if not _chat_visible:
-				_hiding = true
-				get_tree().create_timer(MESSAGE_DURATION + 0.7).timeout.connect(func():
-					_hiding = false
-					if not _chat_visible and is_instance_valid(_vbox):
-						_vbox.visible = false
-				)
-		elif event.keycode == POPUP_TOGGLE_KEY:
-			var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_item_popup.gd")
-			popup_script._enabled = not popup_script._enabled
-			Globals.save_file.set_meta(META_ITEM_POPUPS_ENABLED, popup_script._enabled)
-			Globals.save_game()
-			var state := "Enabled" if popup_script._enabled else "Disabled"
-			if not popup_script._enabled:
-				popup_script.clear_all()
-			show_message("[color=#FAFAD2]Item Popups: %s[/color]" % state, get_tree().get_root())
-		elif event.keycode == FILTER_KEY:
-			_relevant_only = not _relevant_only
-			Globals.save_file.set_meta(META_CHAT_RELEVANT_ONLY, _relevant_only)
-			Globals.save_game()
-			# Re-apply visibility to messages already on screen.
-			for m in _messages:
-				if is_instance_valid(m):
-					var rel: bool = m.get_meta("ap_relevant", true)
-					m.visible = _chat_visible and (rel or not _relevant_only)
-			var filter_state := "Showing Your Messages Only" if _relevant_only else "Showing All Messages"
-			show_message("[color=#FAFAD2]%s[/color]" % filter_state, get_tree().get_root())
-		elif event.keycode == GOAL_KEY:
-			if not is_instance_valid(_ap_client):
-				return
-			_clear_messages()
-			if Globals.save_file.get_meta("ap_goal_complete", false):
-				show_message("[color=#00FF7F]GOAL COMPLETE![/color]", get_tree().get_root())
-				return
-			var required_goals: Array = _ap_client.get_required_goals()
-			if required_goals.is_empty():
-				show_message("[color=#FAFAD2]No goals configured.[/color]", get_tree().get_root())
-				return
-			var stored: Array = Globals.save_file.items_stored
-			var count: int = stored.size()
-			var goal_threshold: int = _ap_client.slot_threshold_for(50)
-			var chk := func(label: String, item_id) -> String:
-				var has_it: bool = stored.has(item_id)
-				return "[color=%s]%s %s[/color]" % ["#00FF7F" if has_it else "#EE0000", "✓" if has_it else "✗", label]
-			var received_jewels: Array = Globals.save_file.get_meta("ap_received_jewels", [])
-			var chk_jewel := func(label: String, ap_item_id: int) -> String:
-				var has_it: bool = received_jewels.has(ap_item_id)
-				return "[color=%s]%s %s[/color]" % ["#00FF7F" if has_it else "#EE0000", "✓" if has_it else "✗", label]
-			var rods := func() -> String:
-				var parts: PackedStringArray = []
-				for pair in [
-					["Base", item_tracker.item_id.COOLING_ROD],
-					["Plimbo", item_tracker.item_id.COOLING_ROD_PLIMBO],
-					["King", item_tracker.item_id.COOLING_ROD_FRIDGE_KING],
-				]:
-					parts.append(chk.call(pair[0], pair[1]))
-				return "Rods: " + " ".join(parts)
-			var gems := func() -> String:
-				var parts: PackedStringArray = []
-				for pair in [["Green", 601], ["Blue", 602], ["Purple", 603], ["Red", 604]]:
-					parts.append(chk_jewel.call(pair[0], pair[1]))
-				return "Gems: " + " ".join(parts)
-			var msg := "[color=#FAFAD2]Goals (all required to win)[/color]\n"
-			for goal in required_goals:
-				var done: bool = _ap_client.is_goal_completed(goal)
-				var header_color := "#00FF7F" if done else "#FAFAD2"
-				var done_mark := " [DONE]" if done else ""
-				match goal:
-					"orb":
-						msg += "\n[color=%s]Orb%s[/color] - %d/%d items\n" % [header_color, done_mark, count, goal_threshold]
-						msg += chk.call("Orb", item_tracker.item_id.ORB) + "\n"
-						msg += rods.call()
-					"museum":
-						msg += "\n[color=%s]Museum%s[/color] - %d/100 items\n" % [header_color, done_mark, count]
-						msg += chk.call("Waffle", item_tracker.item_id.WAFFLE) + "\n"
-						msg += rods.call()
-					"fellowship":
-						msg += "\n[color=%s]Fellowship%s[/color] - %d/%d items\n" % [header_color, done_mark, count, goal_threshold]
-						msg += chk.call("Priestess", item_tracker.item_id.PRIESTESS) + "\n"
-						msg += chk.call("Greenie", item_tracker.item_id.GREENIE) + "\n"
-						msg += rods.call()
-					"lugh":
-						msg += "\n[color=%s]Lugh%s[/color] - %d/%d items\n" % [header_color, done_mark, count, goal_threshold]
-						msg += gems.call()
-					_:
-						msg += "\n[color=%s]%s%s[/color]" % [header_color, str(goal), done_mark]
-			show_message(msg, get_tree().get_root())
-
+static func set_relevant_only(value: bool) -> void:
+	_relevant_only = value
+	Globals.save_file.set_meta(META_CHAT_RELEVANT_ONLY, value)
+	Globals.save_game()
+	# Re-apply visibility to messages already on screen.
+	for m in _messages:
+		if is_instance_valid(m):
+			m.visible = _chat_visible and (m.get_meta("ap_relevant", true) or not _relevant_only)
 
 static func _clear_messages() -> void:
 	for msg in _messages:
@@ -142,9 +42,7 @@ static func clear_all() -> void:
 	_clear_messages()
 
 static func show_message(bbcode_text: String, root: Node, relevant := true) -> void:
-	if _hiding:
-		return
-	# When the "your messages only" filter (F4) is on, drop irrelevant AP messages.
+	# When the "your messages only" filter is on, drop irrelevant AP messages.
 	# Mod-generated messages default to relevant := true so they always show.
 	if _relevant_only and not relevant:
 		return
@@ -178,12 +76,10 @@ static func _create_manager(root: Node) -> void:
 	_manager.add_child(_vbox)
 	root.add_child(_manager)
 
-	# Load persisted function-key toggles from save meta and apply.
+	# Load the persisted settings page toggles from save meta and apply.
 	_chat_visible = Globals.save_file.get_meta(META_CHAT_VISIBLE, _chat_visible)
 	_relevant_only = Globals.save_file.get_meta(META_CHAT_RELEVANT_ONLY, _relevant_only)
 	_vbox.visible = _chat_visible
-	var popup_script = load("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap_item_popup.gd")
-	popup_script._enabled = Globals.save_file.get_meta(META_ITEM_POPUPS_ENABLED, popup_script._enabled)
 
 static func _add_label(bbcode_text: String, relevant := true) -> void:
 	var label := RichTextLabel.new()
@@ -213,3 +109,102 @@ static func _add_label(bbcode_text: String, relevant := true) -> void:
 		if is_instance_valid(label):
 			label.queue_free()
 	)
+
+
+# AP PrintJSON messages
+
+const AP_COLORS: Dictionary = {
+	"red":       "#EE0000",
+	"green":     "#00FF7F",
+	"yellow":    "#FAFAD2",
+	"blue":      "#6495ED",
+	"magenta":   "#EE00EE",
+	"cyan":      "#00EEEE",
+	"white":     "#DDDDDD",
+	"black":     "#222222",
+	"slateblue": "#6D8BE8",
+	"salmon":    "#FA8072",
+	"plum":      "#AF99EF",
+}
+
+# Boilerplate server messages shown on connect that we don't want in chat.
+const FILTERED_MESSAGE_SUBSTRINGS: Array = [
+	"does not support compressed",
+	"Now that you are connected",
+]
+
+static func show_print_json(command: Dictionary, client) -> void:
+	var parts: Array = command.get("data", [])
+	if parts.is_empty() or str(command.get("type", "")) == "Tutorial":
+		return
+	var plain := ""
+	for part in parts:
+		plain += str(part.get("text", ""))
+	for needle in FILTERED_MESSAGE_SUBSTRINGS:
+		if plain.contains(needle):
+			return
+	var bbcode := ""
+	for part in parts:
+		bbcode += _format_part(part, client)
+	if bbcode.strip_edges().is_empty():
+		return
+	show_message(bbcode, client.get_tree().get_root(), _is_relevant(command, parts, client.slot))
+
+static func _format_part(part: Dictionary, client) -> String:
+	var text: String = str(part.get("text", ""))
+	if text.is_empty():
+		return ""
+	var part_type: String = str(part.get("type", "text"))
+	var game_name: String = client.get_player_game(int(part.get("player", 0)))
+	match part_type:
+		"player_id":
+			text = client.get_player_name(int(text))
+		"item_id":
+			if client.data_package:
+				var resolved: String = client.data_package.resolve_item(int(text), game_name)
+				if resolved != "":
+					text = resolved
+		"location_id":
+			if client.data_package:
+				var resolved: String = client.data_package.resolve_location(int(text), game_name)
+				if resolved != "":
+					text = resolved
+
+	var color: String = str(part.get("color", ""))
+	if color.is_empty():
+		match part_type:
+			"player_id", "player_name":
+				color = "slateblue"
+			"item_id", "item_name":
+				var flags: int = int(part.get("flags", 0))
+				if flags & 0b001:
+					color = "plum"
+				elif flags & 0b010:
+					color = "slateblue"
+				elif flags & 0b100:
+					color = "salmon"
+				else:
+					color = "cyan"
+			"location_id", "location_name":
+				color = "green"
+	if AP_COLORS.has(color):
+		return "[color=%s]%s[/color]" % [AP_COLORS[color], text]
+	return text
+
+# For the "your messages only" filter: item/hint messages count when you send or receive
+# the item, others when they reference your slot. Server replies and countdowns always count.
+static func _is_relevant(command: Dictionary, parts: Array, me: int) -> bool:
+	match str(command.get("type", "")):
+		"ItemSend", "Hint":
+			if int(command.get("receiving", -1)) == me:
+				return true
+			var item_dict = command.get("item", null)
+			return item_dict is Dictionary and int(item_dict.get("player", -1)) == me
+		"CommandResult", "AdminCommandResult", "Countdown":
+			return true
+	if int(command.get("slot", -1)) == me:
+		return true
+	for part in parts:
+		if str(part.get("type", "")) == "player_id" and int(str(part.get("text", "-1"))) == me:
+			return true
+	return false

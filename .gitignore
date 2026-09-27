@@ -1,20 +1,13 @@
-# Godot 4+ specific ignores
+# Whitelist: the decompiled game project lives in this folder too, and none of
+# it may be committed. Only the mod itself (and this file) are tracked.
+/*
+!/LICENSE
+!README.md
+!/.gitignore
+!/.gitattributes
+!/mods-unpacked/
+
+# Godot import cache
 .godot/
-.nomedia
-
-# Godot-specific ignores
 .import/
-export.cfg
-export_credentials.cfg
 *.tmp
-
-# Imported translations (automatically generated from CSV files)
-*.translation
-
-# Mono-specific ignores
-.mono/
-data_*/
-mono_crash.*.json
-
-.claude/
-.vscode/settings.json

@@ -1,4 +1,3 @@
-class_name ApTypes
 extends Object
 
 enum SlotType {

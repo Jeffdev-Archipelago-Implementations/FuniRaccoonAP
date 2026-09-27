@@ -1,9 +1,10 @@
 extends CanvasLayer
 
+const ApClient = preload("res://mods-unpacked/Jeffdev-FuniRaccoonAP/ap/funi_raccoon_ap_client.gd")
 const LOG_NAME = "Jeffdev-FuniRaccoonAP/ap_connect_panel"
 const CONFIG_PATH = "user://ap_connect.json"
 
-var ap_client
+var ap_client: ApClient
 var _visible := false
 var _force_open := false
 var _going_to_menu := false
@@ -193,5 +194,3 @@ func _update_status(state: int = -1, error: int = 0) -> void:
 			get_tree().paused = false
 		ap_client.ConnectState.DISCONNECTING:
 			status_label.text = "Disconnecting..."
-		ap_client.ConnectState.SEED_MISMATCH:
-			status_label.text = "Error: Seed mismatch. This save file was started on a different seed."

@@ -147,6 +147,7 @@ signal room_updated(updated_room_info)
 ## Emitted when a `Bounced` packet is received. Contains the packet's data.
 signal bounced_received(bounced_data)
 signal location_info_received(location_id, item_id, item_name, game_name)
+signal location_sent(location_id)
 
 func _init(websocket_client_, config_):
 	websocket_client = websocket_client_
@@ -371,6 +372,7 @@ func set_status(status: int):
 func check_location(location_id: int):
 	## Send a `LocationChecks` packet with the provided location ID(s).
 	websocket_client.send_location_checks([location_id])
+	location_sent.emit(location_id)
 
 func send_location_scouts(locations: Array, create_as_hint: int = 0) -> void:
 	## Send a `LocationScouts` packet to the server to retrieve the item at one or more locations.
