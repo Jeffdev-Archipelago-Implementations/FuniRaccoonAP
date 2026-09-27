@@ -124,7 +124,7 @@ layout_mode = 2
 theme = ExtResource("2")
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 
-[node name="VBoxContainer3" type="VBoxContainer" parent="." unique_id=1294551886]
+[node name="VBoxContainer3" type="VBoxContainer" parent="." unique_id=1294551886 node_paths=PackedStringArray("extra_button")]
 layout_mode = 0
 offset_left = 29.0
 offset_top = 288.0
@@ -132,6 +132,8 @@ offset_right = 289.0
 offset_bottom = 542.0
 focus_neighbor_right = NodePath("../VBoxContainer2")
 script = ExtResource("2_fq4bt")
+extra_button = NodePath("Filter Messages")
+extra_item = true
 
 [node name="Archipelago Settings" type="RichTextLabel" parent="VBoxContainer3" unique_id=313501238]
 layout_mode = 2
@@ -143,6 +145,9 @@ fit_content = true
 
 [node name="Filter Messages" type="CheckBox" parent="VBoxContainer3" unique_id=99731312]
 layout_mode = 2
+focus_neighbor_left = NodePath(".")
+focus_neighbor_right = NodePath(".")
+focus_neighbor_bottom = NodePath("../Hide AP Messages")
 theme = ExtResource("2")
 text = "Filter AP Messages"
 script = ExtResource("4_nlnbd")
@@ -152,6 +157,10 @@ setting = 0
 
 [node name="Hide AP Messages" type="CheckBox" parent="VBoxContainer3" unique_id=1155530836]
 layout_mode = 2
+focus_neighbor_left = NodePath(".")
+focus_neighbor_top = NodePath("../Filter Messages")
+focus_neighbor_right = NodePath(".")
+focus_neighbor_bottom = NodePath("../Show Item Popups")
 theme = ExtResource("2")
 text = "Hide AP Messages"
 script = ExtResource("4_nlnbd")
@@ -161,6 +170,10 @@ setting = 1
 
 [node name="Show Item Popups" type="CheckBox" parent="VBoxContainer3" unique_id=2129031546]
 layout_mode = 2
+focus_neighbor_left = NodePath(".")
+focus_neighbor_top = NodePath("../Hide AP Messages")
+focus_neighbor_right = NodePath(".")
+focus_neighbor_bottom = NodePath(".")
 theme = ExtResource("2")
 text = "Show Item Popups"
 script = ExtResource("4_nlnbd")

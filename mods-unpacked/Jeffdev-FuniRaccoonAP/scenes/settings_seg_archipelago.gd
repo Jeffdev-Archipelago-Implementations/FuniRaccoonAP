@@ -92,7 +92,6 @@ func _update_status() -> void:
 			label.text = str(count)
 			label.visible = count > 0
 
-	# Goals stay dim until they are both required for this slot and won.
 	var required: Array = ap_client.get_required_goals() if connected else []
 	for icon in goal_grid.get_children():
 		var goal_id: String = GOAL_ICONS.get(String(icon.name), "")
@@ -121,6 +120,8 @@ func _tracker_count(icon_name: String) -> int:
 			return maxi(int(save.strength) - 1, 0)
 		"TruckTracker":
 			return _stored(item_tracker.item_id.KEI_TRUCK)
+		"TonyTracker":
+			return 1 if save.get_meta("ap_received_vehicles", []).has(SaveGame.vehicles.TONY) else 0
 		"BoostTracker":
 			return 1 if save.truck_upgrades.has(truck_flags.boost_purchased) else 0
 		"ToastTracker":

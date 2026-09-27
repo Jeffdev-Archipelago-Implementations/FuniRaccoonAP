@@ -9,6 +9,7 @@ static var open_ap_tab_next := false
 var ap_settings: Control
 var ap_button: Button
 var color_rect_ap: ColorRect
+var ap_first_toggle: Control
 
 func _ready() -> void:
 	_add_ap_tab()
@@ -18,7 +19,6 @@ func _add_ap_tab() -> void:
 	var tabs: HBoxContainer = $Container/HBoxContainer
 	var controls_tab: Control = $Container/HBoxContainer/Controls
 
-	# No signals: the copied button connects its own pressed signal in _ready.
 	var no_signals := Node.DUPLICATE_GROUPS | Node.DUPLICATE_SCRIPTS | Node.DUPLICATE_USE_INSTANTIATION
 	var separator: Node = $Container/HBoxContainer/frame5.duplicate(no_signals)
 	var ap_tab: Control = controls_tab.duplicate(no_signals)
@@ -41,6 +41,10 @@ func _add_ap_tab() -> void:
 	ap_settings = load(AP_PAGE_SCENE).instantiate()
 	parent_setting_node.add_child(ap_settings)
 	ap_settings.hide()
+	# The tab button only exists at runtime, so these two links can't live in the page's tscn.
+	ap_first_toggle = ap_settings.get_node("VBoxContainer3/Filter Messages")
+	ap_button.focus_neighbor_bottom = ap_button.get_path_to(ap_first_toggle)
+	ap_first_toggle.focus_neighbor_top = ap_first_toggle.get_path_to(ap_button)
 
 func change_menu(item: menu_item):
 	if open_ap_tab_next:
@@ -60,7 +64,7 @@ func change_menu(item: menu_item):
 		color_rect_controls.color = second_colour
 		color_rect_ap.color = main_colour
 
-		focus_controller_button = null
+		focus_controller_button = ap_first_toggle
 		return
 
 	ap_settings.hide()

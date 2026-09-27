@@ -77,7 +77,7 @@ func _checks_text() -> String:
 		var count: int = 0
 		for location_id in level_checks.get(category[0], []):
 			total += 1
-			if sent_here.has(location_id) or ap_client.checked_locations.has(location_id):
+			if sent_here.has(location_id) or ap_client.is_location_checked(location_id):
 				count += 1
 		if total > 0:
 			lines.append("%s %d/%d" % [category[1], count, total])
@@ -141,4 +141,4 @@ func _ap_show_count(count: int, total: int, level_name: String) -> void:
 	item_info.items_left(count, total, level_name)
 	var info_label = item_info.get_node_or_null("Control/VBoxContainer/info")
 	if info_label != null:
-		info_label.text = str(count) + "/" + str(total) + " checks\nsent"
+		info_label.text = str(count) + "/" + str(total) + " dumpster\nitems sent"

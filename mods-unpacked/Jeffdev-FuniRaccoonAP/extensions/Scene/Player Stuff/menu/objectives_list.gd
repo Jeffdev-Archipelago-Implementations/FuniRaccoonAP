@@ -31,7 +31,7 @@ func show_objective():
 			total_sent += 1
 		var item_menu = ITEM_LIST_ITEM.instantiate()
 		v_box_container.add_child(item_menu)
-		if not Globals.save_file.items_stored.has(key):
+		if not item_sent and not Globals.save_file.items_stored.has(key):
 			item_menu.populate("???????", items_in_level[key][1])
 		else:
 			item_menu.populate(items_in_level[key][0], items_in_level[key][1], item_sent)

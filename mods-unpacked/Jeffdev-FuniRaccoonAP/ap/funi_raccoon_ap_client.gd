@@ -59,6 +59,7 @@ var _active_police_warning: Node2D = null
 func _ready() -> void:
 	super._ready()
 	connection_state_changed.connect(_on_connection_state_changed)
+	room_updated.connect(_on_room_checks_updated)
 	websocket_client.on_print_json.connect(func(command: Dictionary): ApChatPopup.show_print_json(command, self))
 
 func get_player_name(player_slot: int) -> String:
@@ -248,6 +249,9 @@ func item_stored(id: item_tracker.item_id) -> void:
 	if connect_state == ConnectState.CONNECTED_TO_MULTIWORLD:
 		check_location(Ids.store_location(id))
 
+func is_location_checked(location_id: int) -> bool:
+	return checked_locations.has(location_id) or checked_locations.has(float(location_id))
+
 func dumbbell_eaten(collectable_id: String) -> void:
 	if not Ids.DUMBBELL_LOCATIONS.has(collectable_id):
 		ModLoaderLog.warning("dumbbell_eaten: no AP location for '%s'" % collectable_id, _LOG)
@@ -282,6 +286,23 @@ func euro_collected(money_id: String) -> void:
 
 func speedway_completed() -> void:
 	_send_check("ap_checked_speedway", Ids.SPEEDWAY_LOCATION)
+
+func _sync_collected_store_items() -> bool:
+	var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
+	var added := false
+	for location in checked_locations:
+		var id: int = int(location) - Ids.STORE_LOCATION_OFFSET
+		if Ids.STORE_ITEMS.has(id) and not ap_stored.has(id):
+			ap_stored.append(id)
+			if not Globals.save_file.items_found.has(id):
+				Globals.save_file.items_found.append(id)
+			added = true
+	Globals.save_file.set_meta("ap_stored_items", ap_stored)
+	return added
+
+func _on_room_checks_updated(command: Dictionary) -> void:
+	if command.has("checked_locations") and _sync_collected_store_items():
+		Globals.save_game()
 
 func _resend_saved_checks() -> void:
 	for id in Globals.save_file.get_meta("ap_stored_items", []):
@@ -323,6 +344,7 @@ func _on_joined_multiworld() -> void:
 	_end_phone_ratio_trap()
 	_baseline_item_index = Globals.save_file.get_meta("ap_received_item_index", 0)
 	_apply_slot_thresholds()
+	_sync_collected_store_items()
 	_resend_saved_checks()
 	Globals.save_file.streamer_mode = true # All this does is make Hintblo spawn, nothing else
 	_return_to_hub()

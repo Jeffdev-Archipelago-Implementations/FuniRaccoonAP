@@ -76,8 +76,8 @@ script = ExtResource("6_lkwby")
 [node name="Tinnitus" type="CheckBox" parent="VBoxContainer" unique_id=1683180003]
 layout_mode = 2
 focus_neighbor_top = NodePath("../Full")
-focus_neighbor_bottom = NodePath("../submit")
-focus_next = NodePath("../submit")
+focus_neighbor_bottom = NodePath("../Monitor Sound")
+focus_next = NodePath("../Monitor Sound")
 focus_previous = NodePath("../Full")
 theme = ExtResource("2_v4d4o")
 text = "Tinnitus"
@@ -96,10 +96,10 @@ script = ExtResource("3_3oov2")
 
 [node name="Monitor Sound" type="CheckBox" parent="VBoxContainer" unique_id=1180103693]
 layout_mode = 2
-focus_neighbor_top = NodePath("../Full")
+focus_neighbor_top = NodePath("../Tinnitus")
 focus_neighbor_bottom = NodePath("../submit")
 focus_next = NodePath("../submit")
-focus_previous = NodePath("../Full")
+focus_previous = NodePath("../Tinnitus")
 theme = ExtResource("2_v4d4o")
 text = "Monitor Sound"
 script = ExtResource("11_monsnd")
@@ -117,8 +117,8 @@ text = "
 [node name="submit" type="Button" parent="VBoxContainer" unique_id=364969871]
 z_index = 1
 layout_mode = 2
-focus_neighbor_top = NodePath("../Tinnitus")
-focus_previous = NodePath("../Tinnitus")
+focus_neighbor_top = NodePath("../Monitor Sound")
+focus_previous = NodePath("../Monitor Sound")
 theme = ExtResource("2_v4d4o")
 theme_override_colors/font_color = Color(0.658824, 0, 0, 1)
 text = ">Accept"

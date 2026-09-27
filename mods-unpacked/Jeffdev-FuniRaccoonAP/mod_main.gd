@@ -269,12 +269,11 @@ func dumpster_handling(node: Node, body: InteractData) -> void:
 		return
 	var ap_stored: Array = Globals.save_file.get_meta("ap_stored_items", [])
 	var is_new: bool = not ap_stored.has(body.obj_id)
-	var weight_blocking: bool = ap_client.slot_data.get("options", {}).get("dumpster_weight_blocking", false)
 	if not is_new:
 		body.item_in_dumpster.emit()
 		node.process_item(body, false)
 		return
-	if weight_blocking and float(body.weight) > float(Globals.save_file.strength):
+	if float(body.weight) > float(Globals.save_file.strength):
 		ModLoaderLog.info("Dumpster rejected %s: weight %s > strength %s" % [body.obj_id, body.weight, Globals.save_file.strength], MOD_NAME)
 		body.freeze = true
 		body.set_collision_layer_value(3, false)
